@@ -1,0 +1,39 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+out/
+*.tgz
+
+# Pipeline local data
+.cache/
+results/
+
+# Cloudflare / TanStack
+.vinxi/
+.wrangler/
+.output/
+.tanstack/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Env
+.env
+.env.*
+.dev.vars
+
+# Coverage
+coverage/
+*.lcov
+
+# Cache
+.eslintcache
+*.tsbuildinfo
