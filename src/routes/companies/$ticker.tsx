@@ -1,13 +1,14 @@
-import { createFileRoute, Outlet } from "@tanstack/react-router";
-import { getCompany } from "~/server/db";
+import { Link, createFileRoute, Outlet } from "@tanstack/react-router";
 import { CredibilityGauge } from "~/components/CredibilityGauge";
 import { ScoreBreakdown } from "~/components/ScoreBreakdown";
 import { TrendSparkline } from "~/components/TrendSparkline";
 import { OmissionAlert } from "~/components/OmissionAlert";
+import { companyQueryOptions } from "~/lib/queries";
 import { scoreColor, formatQuarter } from "~/lib/utils";
 
 export const Route = createFileRoute("/companies/$ticker")({
-  loader: ({ params }) => getCompany({ data: params.ticker }),
+  loader: ({ params, context }) =>
+    context.queryClient.ensureQueryData(companyQueryOptions(params.ticker)),
   component: CompanyDetail,
 });
 
@@ -18,9 +19,9 @@ function CompanyDetail() {
     return (
       <div className="text-center py-20">
         <h2 className="text-xl text-zinc-400">Company not found</h2>
-        <a href="/" className="text-emerald-400 hover:underline mt-2 inline-block">
+        <Link to="/" className="text-emerald-400 hover:underline mt-2 inline-block">
           Back to dashboard
-        </a>
+        </Link>
       </div>
     );
   }
@@ -39,12 +40,12 @@ function CompanyDetail() {
     <div>
       {/* Header */}
       <div className="mb-8">
-        <a
-          href="/"
+        <Link
+          to="/"
           className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
         >
           Dashboard
-        </a>
+        </Link>
         <span className="text-xs text-zinc-700 mx-2">/</span>
         <span className="text-xs text-zinc-400">{company.ticker}</span>
 
@@ -106,9 +107,14 @@ function CompanyDetail() {
                   {company.quarters
                     .filter((q) => q.overall_score !== null)
                     .map((q) => (
-                      <a
+                      <Link
                         key={q.id}
-                        href={`/companies/${company.ticker}/quarters/${q.fiscal_year}/${q.fiscal_quarter}`}
+                        to="/companies/$ticker/quarters/$year/$quarter"
+                        params={{
+                          ticker: company.ticker,
+                          year: String(q.fiscal_year),
+                          quarter: String(q.fiscal_quarter),
+                        }}
                         className="flex items-center gap-2 text-xs hover:text-white transition-colors"
                       >
                         <span className="text-zinc-500">
@@ -122,7 +128,7 @@ function CompanyDetail() {
                         >
                           {Math.round(q.overall_score!)}
                         </span>
-                      </a>
+                      </Link>
                     ))}
                 </div>
               </div>
@@ -152,9 +158,14 @@ function CompanyDetail() {
             </h2>
             <div className="space-y-2">
               {company.quarters.map((q) => (
-                <a
+                <Link
                   key={q.id}
-                  href={`/companies/${company.ticker}/quarters/${q.fiscal_year}/${q.fiscal_quarter}`}
+                  to="/companies/$ticker/quarters/$year/$quarter"
+                  params={{
+                    ticker: company.ticker,
+                    year: String(q.fiscal_year),
+                    quarter: String(q.fiscal_quarter),
+                  }}
                   className="flex items-center justify-between rounded-lg border border-zinc-800 px-4 py-3 hover:border-zinc-600 hover:bg-zinc-800/50 transition-all"
                 >
                   <div>
@@ -173,7 +184,7 @@ function CompanyDetail() {
                       {Math.round(q.overall_score)}
                     </span>
                   )}
-                </a>
+                </Link>
               ))}
             </div>
           </div>

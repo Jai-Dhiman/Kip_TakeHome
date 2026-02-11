@@ -1,11 +1,13 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { getCompanies } from "~/server/db";
+import { Link, createFileRoute } from "@tanstack/react-router";
 import { CredibilityGauge } from "~/components/CredibilityGauge";
 import { TrendSparkline } from "~/components/TrendSparkline";
+import { companiesQueryOptions } from "~/lib/queries";
 import { scoreColor, scoreLabel } from "~/lib/utils";
+import type { CompanyWithScore } from "~/lib/types";
 
 export const Route = createFileRoute("/")({
-  loader: () => getCompanies(),
+  loader: ({ context }) =>
+    context.queryClient.ensureQueryData(companiesQueryOptions()),
   component: Dashboard,
 });
 
@@ -34,11 +36,7 @@ function Dashboard() {
   );
 }
 
-function CompanyCard({
-  company,
-}: {
-  company: Awaited<ReturnType<typeof getCompanies>>[number];
-}) {
+function CompanyCard({ company }: { company: CompanyWithScore }) {
   const score = company.latest_score?.overall_score ?? null;
   const quarterScores = company.quarters
     .map((q) => q.overall_score)
@@ -46,8 +44,9 @@ function CompanyCard({
     .reverse();
 
   return (
-    <a
-      href={`/companies/${company.ticker}`}
+    <Link
+      to="/companies/$ticker"
+      params={{ ticker: company.ticker }}
       className="group block rounded-xl border border-zinc-800 bg-zinc-900/50 p-5 transition-all hover:border-zinc-600 hover:bg-zinc-900"
     >
       <div className="flex items-start justify-between">
@@ -130,6 +129,6 @@ function CompanyCard({
           </span>
         </div>
       )}
-    </a>
+    </Link>
   );
 }

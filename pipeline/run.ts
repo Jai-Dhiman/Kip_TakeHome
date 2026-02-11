@@ -290,7 +290,7 @@ async function seedD1(dbPath: string = RESULTS_DB_PATH): Promise<void> {
       const batch = rows.slice(i, i + BATCH_SIZE);
       const sql = batch.map((row) => generateInsert(table, row)).join("\n");
       try {
-        await $`npx wrangler d1 execute ${D1_DATABASE_NAME} --command ${sql}`.quiet();
+        await $`bunx wrangler d1 execute ${D1_DATABASE_NAME} --command ${sql}`.quiet();
       } catch (e) {
         console.error(`  Failed to seed batch ${Math.floor(i / BATCH_SIZE) + 1} for ${table}: ${e}`);
       }

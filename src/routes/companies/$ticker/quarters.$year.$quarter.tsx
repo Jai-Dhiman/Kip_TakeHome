@@ -1,23 +1,23 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { getQuarterDetail } from "~/server/db";
+import { Link, createFileRoute } from "@tanstack/react-router";
 import { CredibilityGauge } from "~/components/CredibilityGauge";
 import { ScoreBreakdown } from "~/components/ScoreBreakdown";
 import { DebateView } from "~/components/DebateView";
-import { ClaimCard } from "~/components/ClaimCard";
 import { OmissionAlert } from "~/components/OmissionAlert";
+import { ClaimsTable } from "~/components/ClaimsTable";
+import { quarterDetailQueryOptions } from "~/lib/queries";
 import { formatQuarter } from "~/lib/utils";
 
 export const Route = createFileRoute(
   "/companies/$ticker/quarters/$year/$quarter"
 )({
-  loader: ({ params }) =>
-    getQuarterDetail({
-      data: {
-        ticker: params.ticker,
-        year: Number(params.year),
-        quarter: Number(params.quarter),
-      },
-    }),
+  loader: ({ params, context }) =>
+    context.queryClient.ensureQueryData(
+      quarterDetailQueryOptions(
+        params.ticker,
+        Number(params.year),
+        Number(params.quarter)
+      )
+    ),
   component: QuarterDetail,
 });
 
@@ -29,12 +29,13 @@ function QuarterDetail() {
     return (
       <div className="text-center py-20">
         <h2 className="text-xl text-zinc-400">Quarter not found</h2>
-        <a
-          href={`/companies/${ticker}`}
+        <Link
+          to="/companies/$ticker"
+          params={{ ticker }}
           className="text-emerald-400 hover:underline mt-2 inline-block"
         >
           Back to company
-        </a>
+        </Link>
       </div>
     );
   }
@@ -44,17 +45,13 @@ function QuarterDetail() {
     ? JSON.parse(score.omitted_metrics)
     : [];
 
-  const verifiedClaims = claims.filter(
-    (c) => c.verification?.status === "verified"
-  );
-  const inaccurateClaims = claims.filter(
-    (c) => c.verification?.status === "inaccurate"
-  );
-  const misleadingClaims = claims.filter(
-    (c) => c.verification?.status === "misleading"
-  );
-  const unverifiableClaims = claims.filter(
-    (c) => c.verification?.status === "unverifiable"
+  const statusCounts = claims.reduce(
+    (acc, c) => {
+      const s = c.verification?.status ?? "unverifiable";
+      acc[s] = (acc[s] || 0) + 1;
+      return acc;
+    },
+    {} as Record<string, number>
   );
 
   return (
@@ -62,16 +59,17 @@ function QuarterDetail() {
       {/* Header */}
       <div>
         <div className="flex items-center gap-2 text-xs text-zinc-500 mb-3">
-          <a href="/" className="hover:text-zinc-300 transition-colors">
+          <Link to="/" className="hover:text-zinc-300 transition-colors">
             Dashboard
-          </a>
+          </Link>
           <span className="text-zinc-700">/</span>
-          <a
-            href={`/companies/${ticker}`}
+          <Link
+            to="/companies/$ticker"
+            params={{ ticker }}
             className="hover:text-zinc-300 transition-colors"
           >
             {ticker}
-          </a>
+          </Link>
           <span className="text-zinc-700">/</span>
           <span className="text-zinc-400">
             {formatQuarter(quarter.fiscal_year, quarter.fiscal_quarter)}
@@ -140,25 +138,13 @@ function QuarterDetail() {
 
         {/* Summary badges */}
         <div className="flex flex-wrap gap-2">
-          <Badge color="#22c55e" label="Verified" count={verifiedClaims.length} />
-          <Badge color="#ef4444" label="Inaccurate" count={inaccurateClaims.length} />
-          <Badge color="#f59e0b" label="Misleading" count={misleadingClaims.length} />
-          <Badge color="#94a3b8" label="Unverifiable" count={unverifiableClaims.length} />
+          <Badge color="#22c55e" label="Verified" count={statusCounts.verified ?? 0} />
+          <Badge color="#ef4444" label="Inaccurate" count={statusCounts.inaccurate ?? 0} />
+          <Badge color="#f59e0b" label="Misleading" count={statusCounts.misleading ?? 0} />
+          <Badge color="#94a3b8" label="Unverifiable" count={statusCounts.unverifiable ?? 0} />
         </div>
 
-        {/* Inaccurate first, then misleading, then unverifiable, then verified */}
-        {inaccurateClaims.length > 0 && (
-          <ClaimSection title="Inaccurate Claims" claims={inaccurateClaims} />
-        )}
-        {misleadingClaims.length > 0 && (
-          <ClaimSection title="Misleading Claims" claims={misleadingClaims} />
-        )}
-        {verifiedClaims.length > 0 && (
-          <ClaimSection title="Verified Claims" claims={verifiedClaims} />
-        )}
-        {unverifiableClaims.length > 0 && (
-          <ClaimSection title="Unverifiable Claims" claims={unverifiableClaims} />
-        )}
+        <ClaimsTable claims={claims} />
       </div>
     </div>
   );
@@ -185,28 +171,5 @@ function Badge({
       <span className="font-bold tabular-nums">{count}</span>
       {label}
     </span>
-  );
-}
-
-function ClaimSection({
-  title,
-  claims,
-}: {
-  title: string;
-  claims: Awaited<
-    NonNullable<ReturnType<typeof getQuarterDetail> extends Promise<infer T> ? T : never>
-  >["claims"];
-}) {
-  return (
-    <div>
-      <h4 className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-2">
-        {title}
-      </h4>
-      <div className="space-y-3">
-        {claims.map((claim) => (
-          <ClaimCard key={claim.id} claim={claim} />
-        ))}
-      </div>
-    </div>
   );
 }

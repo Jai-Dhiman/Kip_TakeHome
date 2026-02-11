@@ -12,13 +12,10 @@ import type {
   Verification,
 } from "~/lib/types";
 
-// Helper to get D1 binding from Cloudflare context
-// In development, we use a local SQLite fallback
+import { env } from "cloudflare:workers";
+
 function getDB(): D1Database {
-  // @ts-expect-error - Cloudflare Workers global
-  const env = globalThis.__env || globalThis.process?.env;
-  if (env?.DB) return env.DB;
-  throw new Error("D1 database binding not available");
+  return env.DB;
 }
 
 export const getCompanies = createServerFn({ method: "GET" }).handler(

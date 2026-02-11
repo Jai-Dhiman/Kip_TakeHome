@@ -1,20 +1,20 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { getQuarterDetail } from "~/server/db";
+import { Link, createFileRoute } from "@tanstack/react-router";
 import { VERDICT_COLORS } from "~/lib/types";
+import { quarterDetailQueryOptions } from "~/lib/queries";
 import { formatQuarter } from "~/lib/utils";
 import type { ClaimWithVerification } from "~/lib/types";
 
 export const Route = createFileRoute(
   "/companies/$ticker/transcript/$year/$quarter"
 )({
-  loader: ({ params }) =>
-    getQuarterDetail({
-      data: {
-        ticker: params.ticker,
-        year: Number(params.year),
-        quarter: Number(params.quarter),
-      },
-    }),
+  loader: ({ params, context }) =>
+    context.queryClient.ensureQueryData(
+      quarterDetailQueryOptions(
+        params.ticker,
+        Number(params.year),
+        Number(params.quarter)
+      )
+    ),
   component: TranscriptViewer,
 });
 
@@ -26,12 +26,13 @@ function TranscriptViewer() {
     return (
       <div className="text-center py-20">
         <h2 className="text-xl text-zinc-400">Transcript not found</h2>
-        <a
-          href={`/companies/${ticker}`}
+        <Link
+          to="/companies/$ticker"
+          params={{ ticker }}
           className="text-emerald-400 hover:underline mt-2 inline-block"
         >
           Back to company
-        </a>
+        </Link>
       </div>
     );
   }
@@ -55,23 +56,29 @@ function TranscriptViewer() {
       {/* Header */}
       <div>
         <div className="flex items-center gap-2 text-xs text-zinc-500 mb-3">
-          <a href="/" className="hover:text-zinc-300 transition-colors">
+          <Link to="/" className="hover:text-zinc-300 transition-colors">
             Dashboard
-          </a>
+          </Link>
           <span className="text-zinc-700">/</span>
-          <a
-            href={`/companies/${ticker}`}
+          <Link
+            to="/companies/$ticker"
+            params={{ ticker }}
             className="hover:text-zinc-300 transition-colors"
           >
             {ticker}
-          </a>
+          </Link>
           <span className="text-zinc-700">/</span>
-          <a
-            href={`/companies/${ticker}/quarters/${quarter.fiscal_year}/${quarter.fiscal_quarter}`}
+          <Link
+            to="/companies/$ticker/quarters/$year/$quarter"
+            params={{
+              ticker,
+              year: String(quarter.fiscal_year),
+              quarter: String(quarter.fiscal_quarter),
+            }}
             className="hover:text-zinc-300 transition-colors"
           >
             {formatQuarter(quarter.fiscal_year, quarter.fiscal_quarter)}
-          </a>
+          </Link>
           <span className="text-zinc-700">/</span>
           <span className="text-zinc-400">Transcript</span>
         </div>

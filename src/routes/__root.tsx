@@ -1,12 +1,15 @@
 import {
   HeadContent,
+  Link,
   Outlet,
   Scripts,
-  createRootRoute,
+  createRootRouteWithContext,
 } from "@tanstack/react-router";
+import type { QueryClient } from "@tanstack/react-query";
 import appCss from "~/styles.css?url";
 
-export const Route = createRootRoute({
+export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
+  {
   head: () => ({
     meta: [
       { charSet: "utf-8" },
@@ -27,7 +30,8 @@ export const Route = createRootRoute({
     ],
   }),
   component: RootLayout,
-});
+  }
+);
 
 function RootLayout() {
   return (
@@ -39,11 +43,11 @@ function RootLayout() {
         <nav className="border-b border-zinc-800 bg-zinc-950/80 backdrop-blur-sm sticky top-0 z-50">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             <div className="flex h-14 items-center justify-between">
-              <a href="/" className="flex items-center gap-2">
+              <Link to="/" className="flex items-center gap-2">
                 <span className="text-lg font-bold tracking-tight text-white">
                   Exec<span className="text-emerald-400">Check</span>
                 </span>
-              </a>
+              </Link>
               <span className="text-xs text-zinc-500">
                 Earnings Call Credibility Tracker
               </span>
