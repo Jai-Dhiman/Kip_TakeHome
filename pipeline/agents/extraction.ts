@@ -20,7 +20,7 @@ export async function extractClaims(
 
   const response = await client.messages.create({
     model,
-    max_tokens: 8192,
+    max_tokens: 16384,
     system: EXTRACTION_SYSTEM_PROMPT,
     tools: [
       {
@@ -38,6 +38,12 @@ export async function extractClaims(
       },
     ],
   });
+
+  if (response.stop_reason === "max_tokens") {
+    console.warn(
+      `  WARNING: Extraction response was truncated (max_tokens). Some claims may be missing.`
+    );
+  }
 
   const claims: ExtractedClaim[] = [];
   for (const block of response.content) {

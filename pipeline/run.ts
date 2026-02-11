@@ -266,6 +266,8 @@ function generateInsert(table: string, row: Record<string, unknown>): string {
 
 async function seedD1(dbPath: string = RESULTS_DB_PATH): Promise<void> {
   const db = new Database(dbPath, { readonly: true });
+  const tmpDir = join(import.meta.dir, "..", ".seed-tmp");
+  mkdirSync(tmpDir, { recursive: true });
 
   const tables = [
     "companies",
@@ -289,13 +291,19 @@ async function seedD1(dbPath: string = RESULTS_DB_PATH): Promise<void> {
     for (let i = 0; i < rows.length; i += BATCH_SIZE) {
       const batch = rows.slice(i, i + BATCH_SIZE);
       const sql = batch.map((row) => generateInsert(table, row)).join("\n");
+      const tmpFile = join(tmpDir, `${table}_${i}.sql`);
+      Bun.write(tmpFile, sql);
       try {
-        await $`bunx wrangler d1 execute ${D1_DATABASE_NAME} --command ${sql}`.quiet();
+        await $`bunx wrangler d1 execute ${D1_DATABASE_NAME} --remote --file ${tmpFile}`.quiet();
       } catch (e) {
         console.error(`  Failed to seed batch ${Math.floor(i / BATCH_SIZE) + 1} for ${table}: ${e}`);
       }
     }
   }
+
+  // Clean up temp files
+  const { rmSync } = await import("fs");
+  rmSync(tmpDir, { recursive: true, force: true });
 
   db.close();
   console.log("D1 seeding complete.");
