@@ -143,71 +143,71 @@ Example response format:
 `;
 
 export const EXTRACTION_OUTPUT_SCHEMA = {
-  type: "object" as const,
-  properties: {
-    claims: {
-      type: "array" as const,
-      items: {
-        type: "object" as const,
-        properties: {
-          exact_quote: { type: "string" as const },
-          speaker_name: { type: "string" as const },
-          speaker_role: { type: "string" as const },
-          session: {
-            type: "string" as const,
-            enum: ["prepared_remarks", "qa"],
-          },
-          claim_type: {
-            type: "string" as const,
-            enum: [
-              "absolute_value",
-              "growth_rate",
-              "margin_or_ratio",
-              "comparative",
-            ],
-          },
-          metric_name: { type: "string" as const },
-          claimed_value: { type: "number" as const },
-          claimed_unit: {
-            type: "string" as const,
-            enum: [
-              "USD_millions",
-              "USD_billions",
-              "percentage",
-              "USD_per_share",
-              "basis_points",
-              "count",
-            ],
-          },
-          comparison_basis: { type: ["string", "null"] as const },
-          gaap_type: {
-            type: "string" as const,
-            enum: ["gaap", "non_gaap", "ambiguous"],
-          },
-          extraction_confidence: {
-            type: "number" as const,
-            minimum: 0,
-            maximum: 1,
-          },
-          verifiable_against_sec_filings: {
-            type: "boolean" as const,
-          },
-        },
-        required: [
-          "exact_quote",
-          "speaker_name",
-          "speaker_role",
-          "session",
-          "claim_type",
-          "metric_name",
-          "claimed_value",
-          "claimed_unit",
-          "gaap_type",
-          "extraction_confidence",
-          "verifiable_against_sec_filings",
-        ],
-      },
-    },
-  },
-  required: ["claims"],
+	type: "object" as const,
+	properties: {
+		claims: {
+			type: "array" as const,
+			items: {
+				type: "object" as const,
+				properties: {
+					exact_quote: { type: "string" as const },
+					speaker_name: { type: "string" as const },
+					speaker_role: { type: "string" as const },
+					session: {
+						type: "string" as const,
+						enum: ["prepared_remarks", "qa"],
+					},
+					claim_type: {
+						type: "string" as const,
+						enum: [
+							"absolute_value",
+							"growth_rate",
+							"margin_or_ratio",
+							"comparative",
+						],
+					},
+					metric_name: { type: "string" as const },
+					claimed_value: { type: "number" as const },
+					claimed_unit: {
+						type: "string" as const,
+						enum: [
+							"USD_millions",
+							"USD_billions",
+							"percentage",
+							"USD_per_share",
+							"basis_points",
+							"count",
+						],
+					},
+					comparison_basis: { type: ["string", "null"] as const },
+					gaap_type: {
+						type: "string" as const,
+						enum: ["gaap", "non_gaap", "ambiguous"],
+					},
+					extraction_confidence: {
+						type: "number" as const,
+						minimum: 0,
+						maximum: 1,
+					},
+					verifiable_against_sec_filings: {
+						type: "boolean" as const,
+					},
+				},
+				required: [
+					"exact_quote",
+					"speaker_name",
+					"speaker_role",
+					"session",
+					"claim_type",
+					"metric_name",
+					"claimed_value",
+					"claimed_unit",
+					"gaap_type",
+					"extraction_confidence",
+					"verifiable_against_sec_filings",
+				],
+			},
+		},
+	},
+	required: ["claims"],
 };

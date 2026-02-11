@@ -1,34 +1,46 @@
 import { Database } from "bun:sqlite";
-import { mkdirSync } from "fs";
-import { dirname, join } from "path";
+import { mkdirSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { $ } from "bun";
 import type {
-  CredibilityScore,
-  Debate,
-  ExtractedClaim,
-  MisleadingAssessment,
-  VerificationResult,
+	CredibilityScore,
+	Debate,
+	ExtractedClaim,
+	MisleadingAssessment,
+	VerificationResult,
 } from "~/lib/types";
-import { createPipelineClients, type PipelineClients, type LLMProvider } from "./ai";
-import { extractClaims } from "./agents/extraction";
-import { VerificationEngine } from "./agents/verification";
-import { detectOmissions } from "./agents/omission-detector";
 import { runDebate } from "./agents/debate";
+import { extractClaims } from "./agents/extraction";
+import { detectOmissions } from "./agents/omission-detector";
+import { VerificationEngine } from "./agents/verification";
+import {
+	createPipelineClients,
+	type LLMProvider,
+	type PipelineClients,
+} from "./ai";
+import { AlphaVantageClient } from "./data/alphavantage-client";
 import { Cache } from "./data/cache";
 import { COMPANIES } from "./data/companies";
 import { EdgarClient } from "./data/edgar-client";
-import { AlphaVantageClient } from "./data/alphavantage-client";
-import { fiscalQuarterEndDate, getRecentQuarters } from "./data/fiscal-calendar";
+import {
+	fiscalQuarterEndDate,
+	getRecentQuarters,
+} from "./data/fiscal-calendar";
 
-const RESULTS_DB_PATH = join(import.meta.dir, "..", "results", "execcheck_results.db");
+const RESULTS_DB_PATH = join(
+	import.meta.dir,
+	"..",
+	"results",
+	"execcheck_results.db",
+);
 const D1_DATABASE_NAME = "execcheck-db";
 const BATCH_SIZE = 50;
 
 function initResultsDb(dbPath: string = RESULTS_DB_PATH): Database {
-  mkdirSync(dirname(dbPath), { recursive: true });
-  const db = new Database(dbPath);
+	mkdirSync(dirname(dbPath), { recursive: true });
+	const db = new Database(dbPath);
 
-  db.run(`
+	db.run(`
     CREATE TABLE IF NOT EXISTS companies (
       ticker TEXT PRIMARY KEY,
       name TEXT NOT NULL,
@@ -37,7 +49,7 @@ function initResultsDb(dbPath: string = RESULTS_DB_PATH): Database {
       cik TEXT NOT NULL
     )
   `);
-  db.run(`
+	db.run(`
     CREATE TABLE IF NOT EXISTS quarters (
       id TEXT PRIMARY KEY,
       ticker TEXT NOT NULL REFERENCES companies(ticker),
@@ -48,7 +60,7 @@ function initResultsDb(dbPath: string = RESULTS_DB_PATH): Database {
       UNIQUE(ticker, fiscal_year, fiscal_quarter)
     )
   `);
-  db.run(`
+	db.run(`
     CREATE TABLE IF NOT EXISTS claims (
       id TEXT PRIMARY KEY,
       quarter_id TEXT NOT NULL REFERENCES quarters(id),
@@ -67,13 +79,15 @@ function initResultsDb(dbPath: string = RESULTS_DB_PATH): Database {
     )
   `);
 
-  // Migration for existing databases
-  try {
-    db.run(`ALTER TABLE claims ADD COLUMN verifiable_against_sec_filings INTEGER NOT NULL DEFAULT 1`);
-  } catch {
-    // Column already exists
-  }
-  db.run(`
+	// Migration for existing databases
+	try {
+		db.run(
+			`ALTER TABLE claims ADD COLUMN verifiable_against_sec_filings INTEGER NOT NULL DEFAULT 1`,
+		);
+	} catch {
+		// Column already exists
+	}
+	db.run(`
     CREATE TABLE IF NOT EXISTS verifications (
       claim_id TEXT PRIMARY KEY REFERENCES claims(id),
       status TEXT NOT NULL,
@@ -85,7 +99,7 @@ function initResultsDb(dbPath: string = RESULTS_DB_PATH): Database {
       notes TEXT
     )
   `);
-  db.run(`
+	db.run(`
     CREATE TABLE IF NOT EXISTS misleading_assessments (
       claim_id TEXT PRIMARY KEY REFERENCES claims(id),
       tactics TEXT NOT NULL,
@@ -93,7 +107,7 @@ function initResultsDb(dbPath: string = RESULTS_DB_PATH): Database {
       explanation TEXT NOT NULL
     )
   `);
-  db.run(`
+	db.run(`
     CREATE TABLE IF NOT EXISTS debates (
       quarter_id TEXT PRIMARY KEY REFERENCES quarters(id),
       bull_argument TEXT NOT NULL,
@@ -102,7 +116,7 @@ function initResultsDb(dbPath: string = RESULTS_DB_PATH): Database {
       rounds INTEGER NOT NULL
     )
   `);
-  db.run(`
+	db.run(`
     CREATE TABLE IF NOT EXISTS credibility_scores (
       quarter_id TEXT PRIMARY KEY REFERENCES quarters(id),
       overall_score REAL NOT NULL,
@@ -120,274 +134,373 @@ function initResultsDb(dbPath: string = RESULTS_DB_PATH): Database {
     )
   `);
 
-  return db;
+	return db;
 }
 
 function storeResults(
-  db: Database,
-  ticker: string,
-  quarterId: string,
-  fiscalYear: number,
-  fiscalQuarter: number,
-  periodEndDate: string,
-  transcriptDate: string | null,
-  claims: ExtractedClaim[],
-  verifications: VerificationResult[],
-  assessments: MisleadingAssessment[],
-  debate: Debate,
-  score: CredibilityScore
+	db: Database,
+	ticker: string,
+	quarterId: string,
+	fiscalYear: number,
+	fiscalQuarter: number,
+	periodEndDate: string,
+	transcriptDate: string | null,
+	claims: ExtractedClaim[],
+	verifications: VerificationResult[],
+	assessments: MisleadingAssessment[],
+	debate: Debate,
+	score: CredibilityScore,
 ): void {
-  db.run(
-    `INSERT OR REPLACE INTO quarters (id, ticker, fiscal_year, fiscal_quarter, period_end_date, transcript_date) VALUES (?, ?, ?, ?, ?, ?)`,
-    [quarterId, ticker, fiscalYear, fiscalQuarter, periodEndDate, transcriptDate]
-  );
+	db.run(
+		`INSERT OR REPLACE INTO quarters (id, ticker, fiscal_year, fiscal_quarter, period_end_date, transcript_date) VALUES (?, ?, ?, ?, ?, ?)`,
+		[
+			quarterId,
+			ticker,
+			fiscalYear,
+			fiscalQuarter,
+			periodEndDate,
+			transcriptDate,
+		],
+	);
 
-  const insertClaim = db.prepare(
-    `INSERT OR REPLACE INTO claims (id, quarter_id, speaker_name, speaker_role, session, exact_quote, claim_type, metric_name, claimed_value, claimed_unit, comparison_basis, gaap_type, extraction_confidence, verifiable_against_sec_filings) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  );
-  for (const c of claims) {
-    insertClaim.run(
-      c.id, c.quarter_id, c.speaker_name, c.speaker_role, c.session,
-      c.exact_quote, c.claim_type, c.metric_name, c.claimed_value,
-      c.claimed_unit, c.comparison_basis, c.gaap_type, c.extraction_confidence,
-      c.verifiable_against_sec_filings ? 1 : 0
-    );
-  }
+	const insertClaim = db.prepare(
+		`INSERT OR REPLACE INTO claims (id, quarter_id, speaker_name, speaker_role, session, exact_quote, claim_type, metric_name, claimed_value, claimed_unit, comparison_basis, gaap_type, extraction_confidence, verifiable_against_sec_filings) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+	);
+	for (const c of claims) {
+		insertClaim.run(
+			c.id,
+			c.quarter_id,
+			c.speaker_name,
+			c.speaker_role,
+			c.session,
+			c.exact_quote,
+			c.claim_type,
+			c.metric_name,
+			c.claimed_value,
+			c.claimed_unit,
+			c.comparison_basis,
+			c.gaap_type,
+			c.extraction_confidence,
+			c.verifiable_against_sec_filings ? 1 : 0,
+		);
+	}
 
-  const insertVerification = db.prepare(
-    `INSERT OR REPLACE INTO verifications (claim_id, status, actual_value, deviation_absolute, deviation_percentage, edgar_concept, data_source, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-  );
-  for (const v of verifications) {
-    insertVerification.run(
-      v.claim_id, v.status, v.actual_value, v.deviation_absolute,
-      v.deviation_percentage, v.edgar_concept, v.data_source, v.notes
-    );
-  }
+	const insertVerification = db.prepare(
+		`INSERT OR REPLACE INTO verifications (claim_id, status, actual_value, deviation_absolute, deviation_percentage, edgar_concept, data_source, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+	);
+	for (const v of verifications) {
+		insertVerification.run(
+			v.claim_id,
+			v.status,
+			v.actual_value,
+			v.deviation_absolute,
+			v.deviation_percentage,
+			v.edgar_concept,
+			v.data_source,
+			v.notes,
+		);
+	}
 
-  const insertAssessment = db.prepare(
-    `INSERT OR REPLACE INTO misleading_assessments (claim_id, tactics, severity, explanation) VALUES (?, ?, ?, ?)`
-  );
-  for (const a of assessments) {
-    insertAssessment.run(a.claim_id, a.tactics, a.severity, a.explanation);
-  }
+	const insertAssessment = db.prepare(
+		`INSERT OR REPLACE INTO misleading_assessments (claim_id, tactics, severity, explanation) VALUES (?, ?, ?, ?)`,
+	);
+	for (const a of assessments) {
+		insertAssessment.run(a.claim_id, a.tactics, a.severity, a.explanation);
+	}
 
-  db.run(
-    `INSERT OR REPLACE INTO debates (quarter_id, bull_argument, bear_argument, judge_verdict, rounds) VALUES (?, ?, ?, ?, ?)`,
-    [debate.quarter_id, debate.bull_argument, debate.bear_argument, debate.judge_verdict, debate.rounds]
-  );
+	db.run(
+		`INSERT OR REPLACE INTO debates (quarter_id, bull_argument, bear_argument, judge_verdict, rounds) VALUES (?, ?, ?, ?, ?)`,
+		[
+			debate.quarter_id,
+			debate.bull_argument,
+			debate.bear_argument,
+			debate.judge_verdict,
+			debate.rounds,
+		],
+	);
 
-  db.run(
-    `INSERT OR REPLACE INTO credibility_scores (quarter_id, overall_score, accuracy_score, framing_score, consistency_score, transparency_score, total_claims, verified_claims, inaccurate_claims, misleading_claims, unverifiable_claims, summary, omitted_metrics) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      score.quarter_id, score.overall_score, score.accuracy_score, score.framing_score,
-      score.consistency_score, score.transparency_score, score.total_claims,
-      score.verified_claims, score.inaccurate_claims, score.misleading_claims,
-      score.unverifiable_claims, score.summary, score.omitted_metrics,
-    ]
-  );
+	db.run(
+		`INSERT OR REPLACE INTO credibility_scores (quarter_id, overall_score, accuracy_score, framing_score, consistency_score, transparency_score, total_claims, verified_claims, inaccurate_claims, misleading_claims, unverifiable_claims, summary, omitted_metrics) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		[
+			score.quarter_id,
+			score.overall_score,
+			score.accuracy_score,
+			score.framing_score,
+			score.consistency_score,
+			score.transparency_score,
+			score.total_claims,
+			score.verified_claims,
+			score.inaccurate_claims,
+			score.misleading_claims,
+			score.unverifiable_claims,
+			score.summary,
+			score.omitted_metrics,
+		],
+	);
 }
 
 async function processQuarter(
-  ticker: string,
-  fiscalYear: number,
-  fiscalQuarter: number,
-  cache: Cache,
-  resultsDb: Database,
-  clients: PipelineClients
+	ticker: string,
+	fiscalYear: number,
+	fiscalQuarter: number,
+	cache: Cache,
+	resultsDb: Database,
+	clients: PipelineClients,
 ): Promise<boolean> {
-  const quarterId = `${ticker}-FY${fiscalYear}Q${fiscalQuarter}`;
-  console.log(`Processing ${quarterId}...`);
+	const quarterId = `${ticker}-FY${fiscalYear}Q${fiscalQuarter}`;
+	console.log(`Processing ${quarterId}...`);
 
-  const edgar = new EdgarClient(cache);
-  const av = new AlphaVantageClient(cache);
-  const verifier = new VerificationEngine(edgar);
+	const edgar = new EdgarClient(cache);
+	const av = new AlphaVantageClient(cache);
+	const verifier = new VerificationEngine(edgar);
 
-  // Step 1: Fetch transcript
-  console.log("  Fetching transcript...");
-  const transcript = await av.getTranscript(ticker, fiscalYear, fiscalQuarter);
-  if (transcript === null) {
-    console.warn(`  No transcript available for ${quarterId}, skipping.`);
-    return false;
-  }
+	// Step 1: Fetch transcript
+	console.log("  Fetching transcript...");
+	const transcript = await av.getTranscript(ticker, fiscalYear, fiscalQuarter);
+	if (transcript === null) {
+		console.warn(`  No transcript available for ${quarterId}, skipping.`);
+		return false;
+	}
 
-  // Step 2: Extract claims
-  console.log("  Extracting claims...");
-  const claims = await extractClaims(transcript, clients.extraction);
-  console.log(`  Extracted ${claims.length} claims`);
+	// Step 2: Extract claims
+	console.log("  Extracting claims...");
+	const claims = await extractClaims(transcript, clients.extraction);
+	console.log(`  Extracted ${claims.length} claims`);
 
-  if (claims.length === 0) {
-    console.warn(`  No claims extracted for ${quarterId}, skipping.`);
-    return false;
-  }
+	if (claims.length === 0) {
+		console.warn(`  No claims extracted for ${quarterId}, skipping.`);
+		return false;
+	}
 
-  // Step 3: Split claims by verifiability and verify
-  const verifiableClaims = claims.filter(c => c.verifiable_against_sec_filings);
-  const nonVerifiableClaims = claims.filter(c => !c.verifiable_against_sec_filings);
-  console.log(`  Verifiable: ${verifiableClaims.length}, Not verifiable: ${nonVerifiableClaims.length}`);
+	// Step 3: Split claims by verifiability and verify
+	const verifiableClaims = claims.filter(
+		(c) => c.verifiable_against_sec_filings,
+	);
+	const nonVerifiableClaims = claims.filter(
+		(c) => !c.verifiable_against_sec_filings,
+	);
+	console.log(
+		`  Verifiable: ${verifiableClaims.length}, Not verifiable: ${nonVerifiableClaims.length}`,
+	);
 
-  console.log("  Verifying claims...");
-  const [verifiableVerifications, assessments] = await verifier.verifyAllClaims(
-    verifiableClaims, ticker, fiscalYear, fiscalQuarter
-  );
+	console.log("  Verifying claims...");
+	const [verifiableVerifications, assessments] = await verifier.verifyAllClaims(
+		verifiableClaims,
+		ticker,
+		fiscalYear,
+		fiscalQuarter,
+	);
 
-  // Create "not_verified" entries for non-verifiable claims
-  const nonVerifiableVerifications: VerificationResult[] = nonVerifiableClaims.map(c => ({
-    claim_id: c.id,
-    status: "not_verified" as const,
-    actual_value: null,
-    deviation_absolute: null,
-    deviation_percentage: null,
-    edgar_concept: null,
-    data_source: null,
-    notes: "Claim is not verifiable against SEC filings (segment metric, KPI, or guidance)",
-  }));
+	// Create "not_verified" entries for non-verifiable claims
+	const nonVerifiableVerifications: VerificationResult[] =
+		nonVerifiableClaims.map((c) => ({
+			claim_id: c.id,
+			status: "not_verified" as const,
+			actual_value: null,
+			deviation_absolute: null,
+			deviation_percentage: null,
+			edgar_concept: null,
+			data_source: null,
+			notes:
+				"Claim is not verifiable against SEC filings (segment metric, KPI, or guidance)",
+		}));
 
-  const verifications = [...verifiableVerifications, ...nonVerifiableVerifications];
+	const verifications = [
+		...verifiableVerifications,
+		...nonVerifiableVerifications,
+	];
 
-  // Step 4: Detect omissions
-  console.log("  Detecting omissions...");
-  const omitted = await detectOmissions(
-    transcript, claims, edgar, ticker, fiscalYear, fiscalQuarter
-  );
+	// Step 4: Detect omissions
+	console.log("  Detecting omissions...");
+	const omitted = await detectOmissions(
+		transcript,
+		claims,
+		edgar,
+		ticker,
+		fiscalYear,
+		fiscalQuarter,
+	);
 
-  // Step 5: Fetch all metrics for debate context
-  console.log("  Fetching financial context...");
-  const allMetrics = await edgar.getAllMetrics(ticker, fiscalYear, fiscalQuarter);
+	// Step 5: Fetch all metrics for debate context
+	console.log("  Fetching financial context...");
+	const allMetrics = await edgar.getAllMetrics(
+		ticker,
+		fiscalYear,
+		fiscalQuarter,
+	);
 
-  // Step 6: Run debate (only with verifiable claims and their verifications)
-  console.log("  Running debate round...");
-  const [debate, score] = await runDebate(
-    ticker, quarterId, verifiableClaims, verifiableVerifications, assessments, allMetrics, omitted, clients.debate, clients.judge
-  );
+	// Step 6: Run debate (only with verifiable claims and their verifications)
+	console.log("  Running debate round...");
+	const [debate, score] = await runDebate(
+		ticker,
+		quarterId,
+		verifiableClaims,
+		verifiableVerifications,
+		assessments,
+		allMetrics,
+		omitted,
+		clients.debate,
+		clients.judge,
+	);
 
-  // Step 7: Store results
-  console.log("  Storing results...");
-  const periodEnd = fiscalQuarterEndDate(ticker, fiscalYear, fiscalQuarter);
-  const periodEndStr = `${periodEnd.getFullYear()}-${String(periodEnd.getMonth() + 1).padStart(2, "0")}-${String(periodEnd.getDate()).padStart(2, "0")}`;
+	// Step 7: Store results
+	console.log("  Storing results...");
+	const periodEnd = fiscalQuarterEndDate(ticker, fiscalYear, fiscalQuarter);
+	const periodEndStr = `${periodEnd.getFullYear()}-${String(periodEnd.getMonth() + 1).padStart(2, "0")}-${String(periodEnd.getDate()).padStart(2, "0")}`;
 
-  storeResults(
-    resultsDb, ticker, quarterId, fiscalYear, fiscalQuarter,
-    periodEndStr, transcript.fiscal_period.transcript_date,
-    claims, verifications, assessments, debate, score
-  );
+	storeResults(
+		resultsDb,
+		ticker,
+		quarterId,
+		fiscalYear,
+		fiscalQuarter,
+		periodEndStr,
+		transcript.fiscal_period.transcript_date,
+		claims,
+		verifications,
+		assessments,
+		debate,
+		score,
+	);
 
-  console.log(
-    `  Done: ${quarterId} | Score: ${Math.round(score.overall_score)} | ` +
-    `Claims: ${score.total_claims} (${score.verified_claims}V/${score.inaccurate_claims}I/${score.misleading_claims}M)`
-  );
-  return true;
+	console.log(
+		`  Done: ${quarterId} | Score: ${Math.round(score.overall_score)} | ` +
+			`Claims: ${score.total_claims} (${score.verified_claims}V/${score.inaccurate_claims}I/${score.misleading_claims}M)`,
+	);
+	return true;
 }
 
 // --- D1 Seeding ---
 
 function escapeSqlValue(val: unknown): string {
-  if (val === null || val === undefined) return "NULL";
-  if (typeof val === "number") return String(val);
-  const s = String(val).replace(/'/g, "''");
-  return `'${s}'`;
+	if (val === null || val === undefined) return "NULL";
+	if (typeof val === "number") return String(val);
+	const s = String(val).replace(/'/g, "''");
+	return `'${s}'`;
 }
 
 function generateInsert(table: string, row: Record<string, unknown>): string {
-  const columns = Object.keys(row).join(", ");
-  const values = Object.values(row).map(escapeSqlValue).join(", ");
-  return `INSERT OR REPLACE INTO ${table} (${columns}) VALUES (${values});`;
+	const columns = Object.keys(row).join(", ");
+	const values = Object.values(row).map(escapeSqlValue).join(", ");
+	return `INSERT OR REPLACE INTO ${table} (${columns}) VALUES (${values});`;
 }
 
 async function seedD1(dbPath: string = RESULTS_DB_PATH): Promise<void> {
-  const db = new Database(dbPath, { readonly: true });
-  const tmpDir = join(import.meta.dir, "..", ".seed-tmp");
-  mkdirSync(tmpDir, { recursive: true });
+	const db = new Database(dbPath, { readonly: true });
+	const tmpDir = join(import.meta.dir, "..", ".seed-tmp");
+	mkdirSync(tmpDir, { recursive: true });
 
-  const tables = [
-    "companies",
-    "quarters",
-    "claims",
-    "verifications",
-    "misleading_assessments",
-    "debates",
-    "credibility_scores",
-  ];
+	const tables = [
+		"companies",
+		"quarters",
+		"claims",
+		"verifications",
+		"misleading_assessments",
+		"debates",
+		"credibility_scores",
+	];
 
-  for (const table of tables) {
-    const rows = db.query(`SELECT * FROM ${table}`).all() as Record<string, unknown>[];
-    if (rows.length === 0) {
-      console.log(`  ${table}: 0 rows, skipping`);
-      continue;
-    }
+	for (const table of tables) {
+		const rows = db.query(`SELECT * FROM ${table}`).all() as Record<
+			string,
+			unknown
+		>[];
+		if (rows.length === 0) {
+			console.log(`  ${table}: 0 rows, skipping`);
+			continue;
+		}
 
-    console.log(`  Seeding ${table}: ${rows.length} rows...`);
+		console.log(`  Seeding ${table}: ${rows.length} rows...`);
 
-    for (let i = 0; i < rows.length; i += BATCH_SIZE) {
-      const batch = rows.slice(i, i + BATCH_SIZE);
-      const sql = batch.map((row) => generateInsert(table, row)).join("\n");
-      const tmpFile = join(tmpDir, `${table}_${i}.sql`);
-      Bun.write(tmpFile, sql);
-      try {
-        await $`bunx wrangler d1 execute ${D1_DATABASE_NAME} --remote --file ${tmpFile}`.quiet();
-      } catch (e) {
-        console.error(`  Failed to seed batch ${Math.floor(i / BATCH_SIZE) + 1} for ${table}: ${e}`);
-      }
-    }
-  }
+		for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+			const batch = rows.slice(i, i + BATCH_SIZE);
+			const sql = batch.map((row) => generateInsert(table, row)).join("\n");
+			const tmpFile = join(tmpDir, `${table}_${i}.sql`);
+			Bun.write(tmpFile, sql);
+			try {
+				await $`bunx wrangler d1 execute ${D1_DATABASE_NAME} --remote --file ${tmpFile}`.quiet();
+			} catch (e) {
+				console.error(
+					`  Failed to seed batch ${Math.floor(i / BATCH_SIZE) + 1} for ${table}: ${e}`,
+				);
+			}
+		}
+	}
 
-  // Clean up temp files
-  const { rmSync } = await import("fs");
-  rmSync(tmpDir, { recursive: true, force: true });
+	// Clean up temp files
+	const { rmSync } = await import("node:fs");
+	rmSync(tmpDir, { recursive: true, force: true });
 
-  db.close();
-  console.log("D1 seeding complete.");
+	db.close();
+	console.log("D1 seeding complete.");
 }
 
 // --- Main entry point ---
 
 async function runPipeline(
-  tickers?: string[],
-  numQuarters: number = 4,
-  llmProvider?: LLMProvider
+	tickers?: string[],
+	numQuarters: number = 4,
+	llmProvider?: LLMProvider,
 ): Promise<void> {
-  const targetTickers = tickers ?? COMPANIES.map((c) => c.ticker);
+	const targetTickers = tickers ?? COMPANIES.map((c) => c.ticker);
 
-  const clients = createPipelineClients(llmProvider);
-  console.log(`Using LLM provider: ${llmProvider ?? "hybrid (default)"}`);
+	const clients = createPipelineClients(llmProvider);
+	console.log(`Using LLM provider: ${llmProvider ?? "hybrid (default)"}`);
 
-  const cache = new Cache();
-  const resultsDb = initResultsDb();
+	const cache = new Cache();
+	const resultsDb = initResultsDb();
 
-  // Insert company profiles
-  const insertCompany = resultsDb.prepare(
-    `INSERT OR REPLACE INTO companies (ticker, name, sector, fiscal_year_end_month, cik) VALUES (?, ?, ?, ?, ?)`
-  );
-  for (const company of COMPANIES) {
-    if (targetTickers.includes(company.ticker)) {
-      insertCompany.run(
-        company.ticker, company.name, company.sector,
-        company.fiscal_year_end_month, company.cik
-      );
-    }
-  }
+	// Insert company profiles
+	const insertCompany = resultsDb.prepare(
+		`INSERT OR REPLACE INTO companies (ticker, name, sector, fiscal_year_end_month, cik) VALUES (?, ?, ?, ?, ?)`,
+	);
+	for (const company of COMPANIES) {
+		if (targetTickers.includes(company.ticker)) {
+			insertCompany.run(
+				company.ticker,
+				company.name,
+				company.sector,
+				company.fiscal_year_end_month,
+				company.cik,
+			);
+		}
+	}
 
-  let total = 0;
-  let success = 0;
+	let total = 0;
+	let success = 0;
 
-  for (const ticker of targetTickers) {
-    const quarters = getRecentQuarters(ticker, numQuarters);
-    console.log(`Processing ${ticker}: ${quarters.length} quarters`);
+	for (const ticker of targetTickers) {
+		const quarters = getRecentQuarters(ticker, numQuarters);
+		console.log(`Processing ${ticker}: ${quarters.length} quarters`);
 
-    for (const q of quarters) {
-      total += 1;
-      try {
-        if (await processQuarter(ticker, q.fiscal_year, q.fiscal_quarter, cache, resultsDb, clients)) {
-          success += 1;
-        }
-      } catch (e) {
-        console.error(`Failed to process ${ticker} FY${q.fiscal_year}Q${q.fiscal_quarter}: ${e}`);
-      }
-    }
-  }
+		for (const q of quarters) {
+			total += 1;
+			try {
+				if (
+					await processQuarter(
+						ticker,
+						q.fiscal_year,
+						q.fiscal_quarter,
+						cache,
+						resultsDb,
+						clients,
+					)
+				) {
+					success += 1;
+				}
+			} catch (e) {
+				console.error(
+					`Failed to process ${ticker} FY${q.fiscal_year}Q${q.fiscal_quarter}: ${e}`,
+				);
+			}
+		}
+	}
 
-  console.log(`Pipeline complete: ${success}/${total} quarters processed successfully`);
-  resultsDb.close();
-  cache.close();
+	console.log(
+		`Pipeline complete: ${success}/${total} quarters processed successfully`,
+	);
+	resultsDb.close();
+	cache.close();
 }
 
 // --- CLI ---
@@ -395,25 +508,33 @@ async function runPipeline(
 const args = process.argv.slice(2);
 
 if (args.includes("--seed")) {
-  console.log("Seeding D1...");
-  await seedD1();
+	console.log("Seeding D1...");
+	await seedD1();
 } else if (args.includes("--export-sql")) {
-  const db = new Database(RESULTS_DB_PATH, { readonly: true });
-  const tables = [
-    "companies", "quarters", "claims", "verifications",
-    "misleading_assessments", "debates", "credibility_scores",
-  ];
-  for (const table of tables) {
-    const rows = db.query(`SELECT * FROM ${table}`).all() as Record<string, unknown>[];
-    for (const row of rows) {
-      console.log(generateInsert(table, row));
-    }
-  }
-  db.close();
+	const db = new Database(RESULTS_DB_PATH, { readonly: true });
+	const tables = [
+		"companies",
+		"quarters",
+		"claims",
+		"verifications",
+		"misleading_assessments",
+		"debates",
+		"credibility_scores",
+	];
+	for (const table of tables) {
+		const rows = db.query(`SELECT * FROM ${table}`).all() as Record<
+			string,
+			unknown
+		>[];
+		for (const row of rows) {
+			console.log(generateInsert(table, row));
+		}
+	}
+	db.close();
 } else {
-  const llmProvider: LLMProvider | undefined = args.includes("--anthropic")
-    ? "anthropic"
-    : undefined;
-  const tickers = args.filter((a) => !a.startsWith("--"));
-  await runPipeline(tickers.length > 0 ? tickers : undefined, 4, llmProvider);
+	const llmProvider: LLMProvider | undefined = args.includes("--anthropic")
+		? "anthropic"
+		: undefined;
+	const tickers = args.filter((a) => !a.startsWith("--"));
+	await runPipeline(tickers.length > 0 ? tickers : undefined, 4, llmProvider);
 }

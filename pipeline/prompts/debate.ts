@@ -114,31 +114,31 @@ Example response format:
 `;
 
 export const JUDGE_OUTPUT_SCHEMA = {
-  type: "object" as const,
-  properties: {
-    accuracy_score: { type: "number" as const, minimum: 0, maximum: 100 },
-    framing_score: { type: "number" as const, minimum: 0, maximum: 100 },
-    consistency_score: { type: "number" as const, minimum: 0, maximum: 100 },
-    transparency_score: {
-      type: "number" as const,
-      minimum: 0,
-      maximum: 100,
-    },
-    overall_score: { type: "number" as const, minimum: 0, maximum: 100 },
-    verdict: { type: "string" as const },
-    strongest_bull_point: { type: "string" as const },
-    strongest_bear_point: { type: "string" as const },
-    most_concerning_finding: { type: ["string", "null"] as const },
-    strongest_transparency_evidence: { type: ["string", "null"] as const },
-  },
-  required: [
-    "accuracy_score",
-    "framing_score",
-    "consistency_score",
-    "transparency_score",
-    "overall_score",
-    "verdict",
-    "strongest_bull_point",
-    "strongest_bear_point",
-  ],
+	type: "object" as const,
+	properties: {
+		accuracy_score: { type: "number" as const, minimum: 0, maximum: 100 },
+		framing_score: { type: "number" as const, minimum: 0, maximum: 100 },
+		consistency_score: { type: "number" as const, minimum: 0, maximum: 100 },
+		transparency_score: {
+			type: "number" as const,
+			minimum: 0,
+			maximum: 100,
+		},
+		overall_score: { type: "number" as const, minimum: 0, maximum: 100 },
+		verdict: { type: "string" as const },
+		strongest_bull_point: { type: "string" as const },
+		strongest_bear_point: { type: "string" as const },
+		most_concerning_finding: { type: ["string", "null"] as const },
+		strongest_transparency_evidence: { type: ["string", "null"] as const },
+	},
+	required: [
+		"accuracy_score",
+		"framing_score",
+		"consistency_score",
+		"transparency_score",
+		"overall_score",
+		"verdict",
+		"strongest_bull_point",
+		"strongest_bear_point",
+	],
 };

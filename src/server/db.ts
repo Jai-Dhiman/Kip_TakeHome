@@ -1,164 +1,171 @@
+import { env } from "cloudflare:workers";
 import { createServerFn } from "@tanstack/react-start";
 import type {
-  Claim,
-  ClaimWithVerification,
-  Company,
-  CompanyWithScore,
-  CredibilityScore,
-  Debate,
-  MisleadingAssessment,
-  Quarter,
-  QuarterSummary,
-  Verification,
+	Claim,
+	ClaimWithVerification,
+	Company,
+	CompanyWithScore,
+	CredibilityScore,
+	Debate,
+	MisleadingAssessment,
+	Quarter,
+	QuarterSummary,
+	Verification,
 } from "~/lib/types";
 
-import { env } from "cloudflare:workers";
-
 function getDB(): D1Database {
-  return env.DB;
+	return env.DB;
 }
 
 export const getCompanies = createServerFn({ method: "GET" }).handler(
-  async (): Promise<CompanyWithScore[]> => {
-    const db = getDB();
+	async (): Promise<CompanyWithScore[]> => {
+		const db = getDB();
 
-    const companies = await db
-      .prepare("SELECT * FROM companies ORDER BY ticker")
-      .all<Company>();
+		const companies = await db
+			.prepare("SELECT * FROM companies ORDER BY ticker")
+			.all<Company>();
 
-    const results: CompanyWithScore[] = [];
+		const results: CompanyWithScore[] = [];
 
-    for (const company of companies.results) {
-      // Get quarters with scores
-      const quarters = await db
-        .prepare(
-          `SELECT q.id, q.fiscal_year, q.fiscal_quarter, q.period_end_date,
+		for (const company of companies.results) {
+			// Get quarters with scores
+			const quarters = await db
+				.prepare(
+					`SELECT q.id, q.fiscal_year, q.fiscal_quarter, q.period_end_date,
                   cs.overall_score, cs.total_claims
            FROM quarters q
            LEFT JOIN credibility_scores cs ON cs.quarter_id = q.id
            WHERE q.ticker = ?
            ORDER BY q.period_end_date DESC
-           LIMIT 4`
-        )
-        .bind(company.ticker)
-        .all<QuarterSummary>();
+           LIMIT 4`,
+				)
+				.bind(company.ticker)
+				.all<QuarterSummary>();
 
-      // Latest score
-      const latestQ = quarters.results[0];
-      let latestScore: CredibilityScore | null = null;
-      if (latestQ?.overall_score !== null && latestQ?.overall_score !== undefined) {
-        const scoreRow = await db
-          .prepare("SELECT * FROM credibility_scores WHERE quarter_id = ?")
-          .bind(latestQ.id)
-          .first<CredibilityScore>();
-        latestScore = scoreRow;
-      }
+			// Latest score
+			const latestQ = quarters.results[0];
+			let latestScore: CredibilityScore | null = null;
+			if (
+				latestQ?.overall_score !== null &&
+				latestQ?.overall_score !== undefined
+			) {
+				const scoreRow = await db
+					.prepare("SELECT * FROM credibility_scores WHERE quarter_id = ?")
+					.bind(latestQ.id)
+					.first<CredibilityScore>();
+				latestScore = scoreRow;
+			}
 
-      results.push({
-        ...company,
-        latest_score: latestScore,
-        quarters: quarters.results,
-      });
-    }
+			results.push({
+				...company,
+				latest_score: latestScore,
+				quarters: quarters.results,
+			});
+		}
 
-    return results;
-  }
+		return results;
+	},
 );
 
 export const getCompany = createServerFn({ method: "GET" })
-  .inputValidator((ticker: string) => ticker)
-  .handler(async ({ data: ticker }): Promise<CompanyWithScore | null> => {
-    const db = getDB();
+	.inputValidator((ticker: string) => ticker)
+	.handler(async ({ data: ticker }): Promise<CompanyWithScore | null> => {
+		const db = getDB();
 
-    const company = await db
-      .prepare("SELECT * FROM companies WHERE ticker = ?")
-      .bind(ticker.toUpperCase())
-      .first<Company>();
+		const company = await db
+			.prepare("SELECT * FROM companies WHERE ticker = ?")
+			.bind(ticker.toUpperCase())
+			.first<Company>();
 
-    if (!company) return null;
+		if (!company) return null;
 
-    const quarters = await db
-      .prepare(
-        `SELECT q.id, q.fiscal_year, q.fiscal_quarter, q.period_end_date,
+		const quarters = await db
+			.prepare(
+				`SELECT q.id, q.fiscal_year, q.fiscal_quarter, q.period_end_date,
                 cs.overall_score, cs.total_claims
          FROM quarters q
          LEFT JOIN credibility_scores cs ON cs.quarter_id = q.id
          WHERE q.ticker = ?
-         ORDER BY q.period_end_date DESC`
-      )
-      .bind(ticker.toUpperCase())
-      .all<QuarterSummary>();
+         ORDER BY q.period_end_date DESC`,
+			)
+			.bind(ticker.toUpperCase())
+			.all<QuarterSummary>();
 
-    const latestQ = quarters.results[0];
-    let latestScore: CredibilityScore | null = null;
-    if (latestQ?.overall_score !== null && latestQ?.overall_score !== undefined) {
-      const scoreRow = await db
-        .prepare("SELECT * FROM credibility_scores WHERE quarter_id = ?")
-        .bind(latestQ.id)
-        .first<CredibilityScore>();
-      latestScore = scoreRow;
-    }
+		const latestQ = quarters.results[0];
+		let latestScore: CredibilityScore | null = null;
+		if (
+			latestQ?.overall_score !== null &&
+			latestQ?.overall_score !== undefined
+		) {
+			const scoreRow = await db
+				.prepare("SELECT * FROM credibility_scores WHERE quarter_id = ?")
+				.bind(latestQ.id)
+				.first<CredibilityScore>();
+			latestScore = scoreRow;
+		}
 
-    return {
-      ...company,
-      latest_score: latestScore,
-      quarters: quarters.results,
-    };
-  });
+		return {
+			...company,
+			latest_score: latestScore,
+			quarters: quarters.results,
+		};
+	});
 
 export const getQuarterDetail = createServerFn({ method: "GET" })
-  .inputValidator((input: { ticker: string; year: number; quarter: number }) => input)
-  .handler(
-    async ({
-      data: { ticker, year, quarter },
-    }): Promise<{
-      quarter: Quarter;
-      score: CredibilityScore | null;
-      debate: Debate | null;
-      claims: ClaimWithVerification[];
-    } | null> => {
-      const db = getDB();
+	.inputValidator(
+		(input: { ticker: string; year: number; quarter: number }) => input,
+	)
+	.handler(
+		async ({
+			data: { ticker, year, quarter },
+		}): Promise<{
+			quarter: Quarter;
+			score: CredibilityScore | null;
+			debate: Debate | null;
+			claims: ClaimWithVerification[];
+		} | null> => {
+			const db = getDB();
 
-      const q = await db
-        .prepare(
-          "SELECT * FROM quarters WHERE ticker = ? AND fiscal_year = ? AND fiscal_quarter = ?"
-        )
-        .bind(ticker.toUpperCase(), year, quarter)
-        .first<Quarter>();
+			const q = await db
+				.prepare(
+					"SELECT * FROM quarters WHERE ticker = ? AND fiscal_year = ? AND fiscal_quarter = ?",
+				)
+				.bind(ticker.toUpperCase(), year, quarter)
+				.first<Quarter>();
 
-      if (!q) return null;
+			if (!q) return null;
 
-      const [score, debate, claimsResult] = await Promise.all([
-        db
-          .prepare("SELECT * FROM credibility_scores WHERE quarter_id = ?")
-          .bind(q.id)
-          .first<CredibilityScore>(),
-        db
-          .prepare("SELECT * FROM debates WHERE quarter_id = ?")
-          .bind(q.id)
-          .first<Debate>(),
-        db
-          .prepare("SELECT * FROM claims WHERE quarter_id = ? ORDER BY rowid")
-          .bind(q.id)
-          .all<Claim>(),
-      ]);
+			const [score, debate, claimsResult] = await Promise.all([
+				db
+					.prepare("SELECT * FROM credibility_scores WHERE quarter_id = ?")
+					.bind(q.id)
+					.first<CredibilityScore>(),
+				db
+					.prepare("SELECT * FROM debates WHERE quarter_id = ?")
+					.bind(q.id)
+					.first<Debate>(),
+				db
+					.prepare("SELECT * FROM claims WHERE quarter_id = ? ORDER BY rowid")
+					.bind(q.id)
+					.all<Claim>(),
+			]);
 
-      // Enrich claims with verifications and misleading assessments
-      const claims: ClaimWithVerification[] = [];
-      for (const claim of claimsResult.results) {
-        const [verification, misleading] = await Promise.all([
-          db
-            .prepare("SELECT * FROM verifications WHERE claim_id = ?")
-            .bind(claim.id)
-            .first<Verification>(),
-          db
-            .prepare("SELECT * FROM misleading_assessments WHERE claim_id = ?")
-            .bind(claim.id)
-            .first<MisleadingAssessment>(),
-        ]);
-        claims.push({ ...claim, verification, misleading });
-      }
+			// Enrich claims with verifications and misleading assessments
+			const claims: ClaimWithVerification[] = [];
+			for (const claim of claimsResult.results) {
+				const [verification, misleading] = await Promise.all([
+					db
+						.prepare("SELECT * FROM verifications WHERE claim_id = ?")
+						.bind(claim.id)
+						.first<Verification>(),
+					db
+						.prepare("SELECT * FROM misleading_assessments WHERE claim_id = ?")
+						.bind(claim.id)
+						.first<MisleadingAssessment>(),
+				]);
+				claims.push({ ...claim, verification, misleading });
+			}
 
-      return { quarter: q, score, debate, claims };
-    }
-  );
+			return { quarter: q, score, debate, claims };
+		},
+	);
