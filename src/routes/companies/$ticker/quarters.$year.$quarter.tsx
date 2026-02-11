@@ -151,6 +151,7 @@ function QuarterDetail() {
           <Badge color="#B54A32" label="Inaccurate" count={statusCounts.inaccurate ?? 0} />
           <Badge color="#C48B20" label="Misleading" count={statusCounts.misleading ?? 0} />
           <Badge color="#7A8599" label="Unverifiable" count={statusCounts.unverifiable ?? 0} />
+          <Badge color="#A0AEC0" label="Not Verified" count={statusCounts.not_verified ?? 0} />
         </div>
 
         <ClaimsTable claims={claims} />

@@ -1,66 +1,71 @@
-import Anthropic from "@anthropic-ai/sdk";
 import { randomUUID } from "crypto";
+import type { LLMClient, LLMMessage } from "../ai/llm-client";
+import { AnthropicClient } from "../ai/anthropic-client";
 import type { ExtractedClaim, Transcript } from "~/lib/types";
 import {
   EXTRACTION_FEW_SHOT,
+  EXTRACTION_JSON_INSTRUCTION,
   EXTRACTION_OUTPUT_SCHEMA,
   EXTRACTION_SYSTEM_PROMPT,
 } from "../prompts/extraction";
 
-const DEFAULT_MODEL = "claude-sonnet-4-20250514";
-
 export async function extractClaims(
   transcript: Transcript,
-  model: string = DEFAULT_MODEL,
-  apiKey?: string
+  client: LLMClient
 ): Promise<ExtractedClaim[]> {
-  const client = new Anthropic(apiKey ? { apiKey } : undefined);
-
   const transcriptText = formatTranscriptForExtraction(transcript);
 
-  const response = await client.messages.create({
-    model,
-    max_tokens: 16384,
-    system: EXTRACTION_SYSTEM_PROMPT,
-    tools: [
-      {
-        name: "submit_claims",
-        description:
-          "Submit the extracted financial claims from the transcript.",
-        input_schema: EXTRACTION_OUTPUT_SCHEMA as Anthropic.Tool.InputSchema,
-      },
-    ],
-    tool_choice: { type: "tool", name: "submit_claims" },
-    messages: [
-      {
-        role: "user",
-        content: `${EXTRACTION_FEW_SHOT}\n\nNow extract all quantitative claims from the following earnings call transcript for ${transcript.ticker}:\n\n${transcriptText}`,
-      },
-    ],
-  });
+  const userContent = `${EXTRACTION_FEW_SHOT}\n\nNow extract all quantitative claims from the following earnings call transcript for ${transcript.ticker}:\n\n${transcriptText}`;
 
-  if (response.stop_reason === "max_tokens") {
-    console.warn(
-      `  WARNING: Extraction response was truncated (max_tokens). Some claims may be missing.`
+  let parsed: { claims: RawClaim[] };
+
+  if (client instanceof AnthropicClient) {
+    parsed = await client.chatJSON<{ claims: RawClaim[] }>(
+      [
+        { role: "system", content: EXTRACTION_SYSTEM_PROMPT },
+        { role: "user", content: userContent },
+      ],
+      16384,
+      "submit_claims",
+      "Submit the extracted financial claims from the transcript.",
+      EXTRACTION_OUTPUT_SCHEMA
+    );
+  } else {
+    parsed = await client.chatJSON<{ claims: RawClaim[] }>(
+      [
+        {
+          role: "system",
+          content: EXTRACTION_SYSTEM_PROMPT + EXTRACTION_JSON_INSTRUCTION,
+        },
+        { role: "user", content: userContent },
+      ],
+      16384
     );
   }
 
-  const claims: ExtractedClaim[] = [];
-  for (const block of response.content) {
-    if (block.type === "tool_use" && block.name === "submit_claims") {
-      const input = block.input as { claims: RawClaim[] };
-      const rawClaims = input.claims ?? [];
-      for (const raw of rawClaims) {
-        const claim = parseRawClaim(raw, transcript);
-        if (claim !== null) {
-          claims.push(claim);
-        }
-      }
+  const allClaims: ExtractedClaim[] = [];
+  const rawClaims = parsed.claims ?? [];
+  for (const raw of rawClaims) {
+    const claim = parseRawClaim(raw, transcript);
+    if (claim !== null) {
+      allClaims.push(claim);
     }
   }
 
+  // Deduplicate: keep first occurrence per (metric_name, claimed_value, claimed_unit, claim_type)
+  const seen = new Set<string>();
+  const claims: ExtractedClaim[] = [];
+  for (const claim of allClaims) {
+    const key = `${claim.metric_name.toLowerCase()}|${claim.claimed_value}|${claim.claimed_unit}|${claim.claim_type}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      claims.push(claim);
+    }
+  }
+
+  const dupeCount = allClaims.length - claims.length;
   console.log(
-    `Extracted ${claims.length} claims from ${transcript.ticker} ${transcript.fiscal_period.ticker}-FY${transcript.fiscal_period.fiscal_year}Q${transcript.fiscal_period.fiscal_quarter}`
+    `Extracted ${claims.length} claims (${dupeCount} duplicates removed) from ${transcript.ticker} ${transcript.fiscal_period.ticker}-FY${transcript.fiscal_period.fiscal_year}Q${transcript.fiscal_period.fiscal_quarter}`
   );
   return claims;
 }
@@ -87,13 +92,35 @@ interface RawClaim {
   comparison_basis?: string | null;
   gaap_type?: string;
   extraction_confidence?: number;
+  verifiable_against_sec_filings?: boolean;
 }
+
+// Keywords indicating a metric is NOT verifiable against SEC filings
+const NON_VERIFIABLE_KEYWORDS = [
+  // Product lines
+  "iphone", "ipad", "mac", "watch", "airpods", "vision pro", "homepod", "apple tv", "app store",
+  // Segments / cloud / brands
+  "services", "wearables", "accessories", "segment", "cloud", "azure", "aws",
+  "google cloud", "office", "windows", "linkedin", "gaming", "xbox", "surface", "devices",
+  // Non-financial operating metrics
+  "subscriber", "user", "customer", "store", "headcount", "employee", "engagement",
+  // Forward-looking
+  "guidance", "outlook", "forecast",
+];
 
 function parseRawClaim(
   raw: RawClaim,
   transcript: Transcript
 ): ExtractedClaim | null {
   try {
+    // Skip claims with missing required fields
+    if (raw.claimed_value == null || typeof raw.claimed_value !== "number" || isNaN(raw.claimed_value)) {
+      return null;
+    }
+    if (!raw.exact_quote || !raw.metric_name || !raw.claimed_unit) {
+      return null;
+    }
+
     let claimedValue = raw.claimed_value;
     let claimedUnit = raw.claimed_unit;
 
@@ -104,6 +131,15 @@ function parseRawClaim(
     }
 
     const quarterId = `${transcript.ticker}-FY${transcript.fiscal_period.fiscal_year}Q${transcript.fiscal_period.fiscal_quarter}`;
+
+    // Rule-based override: force verifiable = false for non-SEC-matchable metrics
+    let verifiable = raw.verifiable_against_sec_filings ?? false;
+    if (verifiable) {
+      const lower = raw.metric_name.toLowerCase();
+      if (NON_VERIFIABLE_KEYWORDS.some((kw) => lower.includes(kw))) {
+        verifiable = false;
+      }
+    }
 
     return {
       id: randomUUID(),
@@ -119,6 +155,7 @@ function parseRawClaim(
       comparison_basis: raw.comparison_basis ?? null,
       gaap_type: (raw.gaap_type as ExtractedClaim["gaap_type"]) ?? "ambiguous",
       extraction_confidence: raw.extraction_confidence ?? 0.5,
+      verifiable_against_sec_filings: verifiable,
     };
   } catch (e) {
     console.warn(

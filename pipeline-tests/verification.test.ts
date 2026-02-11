@@ -17,6 +17,7 @@ function makeClaim(overrides: Partial<ExtractedClaim> = {}): ExtractedClaim {
     comparison_basis: null,
     gaap_type: "ambiguous",
     extraction_confidence: 0.95,
+    verifiable_against_sec_filings: true,
     ...overrides,
   };
 }

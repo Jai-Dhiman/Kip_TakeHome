@@ -5,6 +5,7 @@ export interface MetricMapping {
   unit: string;
   statement: string; // "income" | "balance_sheet" | "cash_flow" | "computed"
   isNonGaap: boolean;
+  isPointInTime: boolean;
 }
 
 export const METRIC_MAPPINGS: MetricMapping[] = [
@@ -18,6 +19,8 @@ export const METRIC_MAPPINGS: MetricMapping[] = [
       "net sales",
       "total net revenue",
       "sales",
+      "total net sales",
+      "net revenues",
     ],
     xbrlConcepts: [
       "RevenueFromContractWithCustomerExcludingAssessedTax",
@@ -29,6 +32,7 @@ export const METRIC_MAPPINGS: MetricMapping[] = [
     unit: "USD",
     statement: "income",
     isNonGaap: false,
+    isPointInTime: false,
   },
   {
     canonicalName: "cost_of_revenue",
@@ -46,6 +50,7 @@ export const METRIC_MAPPINGS: MetricMapping[] = [
     unit: "USD",
     statement: "income",
     isNonGaap: false,
+    isPointInTime: false,
   },
   {
     canonicalName: "gross_profit",
@@ -54,6 +59,7 @@ export const METRIC_MAPPINGS: MetricMapping[] = [
     unit: "USD",
     statement: "income",
     isNonGaap: false,
+    isPointInTime: false,
   },
   {
     canonicalName: "operating_income",
@@ -70,10 +76,17 @@ export const METRIC_MAPPINGS: MetricMapping[] = [
     unit: "USD",
     statement: "income",
     isNonGaap: false,
+    isPointInTime: false,
   },
   {
     canonicalName: "net_income",
-    aliases: ["net income", "net earnings", "net profit", "bottom line"],
+    aliases: [
+      "net income",
+      "net earnings",
+      "net profit",
+      "bottom line",
+      "net income attributable to common stockholders",
+    ],
     xbrlConcepts: [
       "NetIncomeLoss",
       "ProfitLoss",
@@ -82,6 +95,7 @@ export const METRIC_MAPPINGS: MetricMapping[] = [
     unit: "USD",
     statement: "income",
     isNonGaap: false,
+    isPointInTime: false,
   },
   {
     canonicalName: "eps_basic",
@@ -95,14 +109,16 @@ export const METRIC_MAPPINGS: MetricMapping[] = [
     unit: "USD/share",
     statement: "income",
     isNonGaap: false,
+    isPointInTime: false,
   },
   {
     canonicalName: "eps_diluted",
-    aliases: ["diluted EPS", "diluted earnings per share"],
+    aliases: ["diluted EPS", "diluted earnings per share", "eps diluted"],
     xbrlConcepts: ["EarningsPerShareDiluted"],
     unit: "USD/share",
     statement: "income",
     isNonGaap: false,
+    isPointInTime: false,
   },
   {
     canonicalName: "research_and_development",
@@ -116,6 +132,7 @@ export const METRIC_MAPPINGS: MetricMapping[] = [
     unit: "USD",
     statement: "income",
     isNonGaap: false,
+    isPointInTime: false,
   },
   {
     canonicalName: "selling_general_admin",
@@ -128,6 +145,7 @@ export const METRIC_MAPPINGS: MetricMapping[] = [
     unit: "USD",
     statement: "income",
     isNonGaap: false,
+    isPointInTime: false,
   },
   {
     canonicalName: "operating_expenses",
@@ -136,6 +154,7 @@ export const METRIC_MAPPINGS: MetricMapping[] = [
     unit: "USD",
     statement: "income",
     isNonGaap: false,
+    isPointInTime: false,
   },
   {
     canonicalName: "interest_expense",
@@ -144,6 +163,7 @@ export const METRIC_MAPPINGS: MetricMapping[] = [
     unit: "USD",
     statement: "income",
     isNonGaap: false,
+    isPointInTime: false,
   },
   {
     canonicalName: "income_tax_expense",
@@ -156,6 +176,7 @@ export const METRIC_MAPPINGS: MetricMapping[] = [
     unit: "USD",
     statement: "income",
     isNonGaap: false,
+    isPointInTime: false,
   },
   // --- Margins (computed) ---
   {
@@ -165,6 +186,7 @@ export const METRIC_MAPPINGS: MetricMapping[] = [
     unit: "percentage",
     statement: "computed",
     isNonGaap: false,
+    isPointInTime: false,
   },
   {
     canonicalName: "operating_margin",
@@ -173,6 +195,7 @@ export const METRIC_MAPPINGS: MetricMapping[] = [
     unit: "percentage",
     statement: "computed",
     isNonGaap: false,
+    isPointInTime: false,
   },
   {
     canonicalName: "net_margin",
@@ -181,6 +204,7 @@ export const METRIC_MAPPINGS: MetricMapping[] = [
     unit: "percentage",
     statement: "computed",
     isNonGaap: false,
+    isPointInTime: false,
   },
   // --- Balance Sheet ---
   {
@@ -190,6 +214,7 @@ export const METRIC_MAPPINGS: MetricMapping[] = [
     unit: "USD",
     statement: "balance_sheet",
     isNonGaap: false,
+    isPointInTime: true,
   },
   {
     canonicalName: "total_liabilities",
@@ -198,6 +223,7 @@ export const METRIC_MAPPINGS: MetricMapping[] = [
     unit: "USD",
     statement: "balance_sheet",
     isNonGaap: false,
+    isPointInTime: true,
   },
   {
     canonicalName: "total_equity",
@@ -214,10 +240,16 @@ export const METRIC_MAPPINGS: MetricMapping[] = [
     unit: "USD",
     statement: "balance_sheet",
     isNonGaap: false,
+    isPointInTime: true,
   },
   {
     canonicalName: "cash_and_equivalents",
-    aliases: ["cash", "cash and equivalents", "cash and cash equivalents"],
+    aliases: [
+      "cash",
+      "cash and equivalents",
+      "cash and cash equivalents",
+      "cash and short-term investments",
+    ],
     xbrlConcepts: [
       "CashAndCashEquivalentsAtCarryingValue",
       "CashCashEquivalentsAndShortTermInvestments",
@@ -225,10 +257,11 @@ export const METRIC_MAPPINGS: MetricMapping[] = [
     unit: "USD",
     statement: "balance_sheet",
     isNonGaap: false,
+    isPointInTime: true,
   },
   {
     canonicalName: "total_debt",
-    aliases: ["total debt", "long-term debt", "debt"],
+    aliases: ["total debt", "long-term debt", "debt", "long term debt", "term debt"],
     xbrlConcepts: [
       "LongTermDebt",
       "LongTermDebtNoncurrent",
@@ -237,6 +270,7 @@ export const METRIC_MAPPINGS: MetricMapping[] = [
     unit: "USD",
     statement: "balance_sheet",
     isNonGaap: false,
+    isPointInTime: true,
   },
   // --- Cash Flow ---
   {
@@ -246,11 +280,14 @@ export const METRIC_MAPPINGS: MetricMapping[] = [
       "cash from operations",
       "cash flow from operations",
       "CFO",
+      "cash provided by operating activities",
+      "net cash from operations",
     ],
     xbrlConcepts: ["NetCashProvidedByUsedInOperatingActivities"],
     unit: "USD",
     statement: "cash_flow",
     isNonGaap: false,
+    isPointInTime: false,
   },
   {
     canonicalName: "capital_expenditures",
@@ -267,6 +304,7 @@ export const METRIC_MAPPINGS: MetricMapping[] = [
     unit: "USD",
     statement: "cash_flow",
     isNonGaap: false,
+    isPointInTime: false,
   },
   {
     canonicalName: "free_cash_flow",
@@ -275,6 +313,7 @@ export const METRIC_MAPPINGS: MetricMapping[] = [
     unit: "USD",
     statement: "computed",
     isNonGaap: true,
+    isPointInTime: false,
   },
   {
     canonicalName: "share_repurchases",
@@ -288,10 +327,17 @@ export const METRIC_MAPPINGS: MetricMapping[] = [
     unit: "USD",
     statement: "cash_flow",
     isNonGaap: false,
+    isPointInTime: false,
   },
   {
     canonicalName: "dividends_paid",
-    aliases: ["dividends", "dividends paid", "cash dividends"],
+    aliases: [
+      "dividends",
+      "dividends paid",
+      "cash dividends",
+      "dividend payments",
+      "cash dividends paid",
+    ],
     xbrlConcepts: [
       "PaymentsOfDividendsCommonStock",
       "PaymentsOfDividends",
@@ -299,6 +345,7 @@ export const METRIC_MAPPINGS: MetricMapping[] = [
     unit: "USD",
     statement: "cash_flow",
     isNonGaap: false,
+    isPointInTime: false,
   },
   // --- Per-share metrics ---
   {
@@ -316,6 +363,7 @@ export const METRIC_MAPPINGS: MetricMapping[] = [
     unit: "shares",
     statement: "income",
     isNonGaap: false,
+    isPointInTime: false,
   },
 ];
 
@@ -334,19 +382,7 @@ export function resolveMetric(
   naturalLanguageName: string
 ): MetricMapping | null {
   const normalized = normalize(naturalLanguageName);
-
-  // Exact match
-  const exact = ALIAS_INDEX.get(normalized);
-  if (exact) return exact;
-
-  // Substring match
-  for (const [alias, mapping] of ALIAS_INDEX) {
-    if (alias.includes(normalized) || normalized.includes(alias)) {
-      return mapping;
-    }
-  }
-
-  return null;
+  return ALIAS_INDEX.get(normalized) ?? null;
 }
 
 export function getAllMetricNames(): string[] {

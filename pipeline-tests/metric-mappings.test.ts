@@ -90,6 +90,59 @@ describe("resolveMetric", () => {
     expect(m).not.toBeNull();
     expect(m!.canonicalName).toBe("research_and_development");
   });
+
+  test("new alias: total net sales -> revenue", () => {
+    const m = resolveMetric("total net sales");
+    expect(m).not.toBeNull();
+    expect(m!.canonicalName).toBe("revenue");
+  });
+
+  test("new alias: eps diluted -> eps_diluted", () => {
+    const m = resolveMetric("eps diluted");
+    expect(m).not.toBeNull();
+    expect(m!.canonicalName).toBe("eps_diluted");
+  });
+
+  test("new alias: cash provided by operating activities", () => {
+    const m = resolveMetric("cash provided by operating activities");
+    expect(m).not.toBeNull();
+    expect(m!.canonicalName).toBe("operating_cash_flow");
+  });
+
+  test("new alias: dividend payments -> dividends_paid", () => {
+    const m = resolveMetric("dividend payments");
+    expect(m).not.toBeNull();
+    expect(m!.canonicalName).toBe("dividends_paid");
+  });
+
+  // Segment metrics must NOT resolve (no more substring matching)
+  test("services revenue returns null", () => {
+    expect(resolveMetric("services revenue")).toBeNull();
+  });
+
+  test("Mac revenue returns null", () => {
+    expect(resolveMetric("Mac revenue")).toBeNull();
+  });
+
+  test("cloud revenue returns null", () => {
+    expect(resolveMetric("cloud revenue")).toBeNull();
+  });
+
+  test("iPhone revenue returns null", () => {
+    expect(resolveMetric("iPhone revenue")).toBeNull();
+  });
+
+  test("Microsoft Cloud revenue returns null", () => {
+    expect(resolveMetric("Microsoft Cloud revenue")).toBeNull();
+  });
+
+  test("intelligent cloud revenue returns null", () => {
+    expect(resolveMetric("intelligent cloud revenue")).toBeNull();
+  });
+
+  test("products revenue returns null", () => {
+    expect(resolveMetric("products revenue")).toBeNull();
+  });
 });
 
 describe("getAllMetricNames", () => {

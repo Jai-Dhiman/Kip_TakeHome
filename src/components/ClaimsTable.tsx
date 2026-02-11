@@ -186,6 +186,7 @@ export function ClaimsTable({ claims }: { claims: ClaimWithVerification[] }) {
           <option value="inaccurate">Inaccurate</option>
           <option value="misleading">Misleading</option>
           <option value="unverifiable">Unverifiable</option>
+          <option value="not_verified">Not Verified</option>
         </select>
         <span className="text-[10px] font-mono text-ink-300">
           {table.getFilteredRowModel().rows.length} claims

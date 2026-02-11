@@ -27,7 +27,24 @@ Rules:
 - Convert all dollar values to millions (e.g., "$1.2 billion" -> claimed_value: 1200, claimed_unit: "USD_millions")
 - For percentages, store as the percentage value (e.g., "grew 15%" -> claimed_value: 15, claimed_unit: "percentage")
 - For EPS, use USD_per_share as the unit
-- For basis points, store the bps value directly`;
+- For basis points, store the bps value directly
+
+Verifiability classification (verifiable_against_sec_filings):
+Set to TRUE for total company-level metrics that appear in SEC filings:
+  - Total company revenue, net income, operating income, gross profit, EPS (basic/diluted)
+  - Operating expenses, R&D, SG&A, interest expense, income tax
+  - Total assets, total liabilities, total equity, cash and equivalents, total debt
+  - Operating cash flow, capital expenditures, free cash flow, share repurchases, dividends paid
+  - Company-level margins (gross margin, operating margin, net margin)
+  - Growth rates for any of the above total company metrics
+
+Set to FALSE for metrics NOT directly verifiable against SEC filings:
+  - Segment or product revenue (e.g., "services revenue", "cloud revenue", "iPhone revenue", "Mac revenue")
+  - Business unit metrics (e.g., "intelligent cloud revenue", "Azure revenue")
+  - KPIs and subscriber/user counts (e.g., "paid subscribers", "monthly active users")
+  - Forward-looking guidance (e.g., "we expect revenue of...")
+  - Non-financial operational metrics (e.g., "number of stores", "headcount")
+  - Market-level or industry claims`;
 
 export const EXTRACTION_FEW_SHOT = `Here are examples of correctly extracted claims:
 
@@ -42,7 +59,8 @@ Extracted:
   "claimed_unit": "USD_millions",
   "comparison_basis": null,
   "gaap_type": "ambiguous",
-  "extraction_confidence": 0.95
+  "extraction_confidence": 0.95,
+  "verifiable_against_sec_filings": true
 }
 AND a second claim from the same quote:
 {
@@ -53,7 +71,8 @@ AND a second claim from the same quote:
   "claimed_unit": "percentage",
   "comparison_basis": "year-over-year",
   "gaap_type": "ambiguous",
-  "extraction_confidence": 0.95
+  "extraction_confidence": 0.95,
+  "verifiable_against_sec_filings": true
 }
 
 Example 2 - Non-GAAP Metric:
@@ -67,7 +86,8 @@ Extracted:
   "claimed_unit": "percentage",
   "comparison_basis": null,
   "gaap_type": "non_gaap",
-  "extraction_confidence": 0.95
+  "extraction_confidence": 0.95,
+  "verifiable_against_sec_filings": true
 }
 
 Example 3 - EPS:
@@ -81,10 +101,11 @@ Extracted:
   "claimed_unit": "USD_per_share",
   "comparison_basis": null,
   "gaap_type": "ambiguous",
-  "extraction_confidence": 0.95
+  "extraction_confidence": 0.95,
+  "verifiable_against_sec_filings": true
 }
 
-Example 4 - Growth Rate:
+Example 4 - Growth Rate (segment - not verifiable):
 Transcript: "Cloud revenue grew 29% year over year to $33.7 billion."
 Extracted:
 {
@@ -95,8 +116,31 @@ Extracted:
   "claimed_unit": "percentage",
   "comparison_basis": "year-over-year",
   "gaap_type": "ambiguous",
-  "extraction_confidence": 0.9
+  "extraction_confidence": 0.9,
+  "verifiable_against_sec_filings": false
 }`;
+
+export const EXTRACTION_JSON_INSTRUCTION = `
+
+You MUST respond with valid JSON only. No markdown, no explanation, no text outside the JSON object.
+
+Return a JSON object with a single key "claims" containing an array of claim objects. Each claim object must have these fields:
+- "exact_quote" (string): The exact sentence or phrase containing the claim
+- "speaker_name" (string): Who made the claim
+- "speaker_role" (string): Their role (CEO, CFO, etc.)
+- "session" (string): Either "prepared_remarks" or "qa"
+- "claim_type" (string): One of "absolute_value", "growth_rate", "margin_or_ratio", "comparative"
+- "metric_name" (string): The financial metric (e.g., "revenue", "operating margin", "EPS")
+- "claimed_value" (number): The numerical value claimed
+- "claimed_unit" (string): One of "USD_millions", "USD_billions", "percentage", "USD_per_share", "basis_points", "count"
+- "comparison_basis" (string or null): If a comparison, what period or baseline
+- "gaap_type" (string): One of "gaap", "non_gaap", "ambiguous"
+- "extraction_confidence" (number): 0.0-1.0
+- "verifiable_against_sec_filings" (boolean): true if verifiable against SEC filings
+
+Example response format:
+{"claims": [{"exact_quote": "...", "speaker_name": "...", "speaker_role": "...", "session": "prepared_remarks", "claim_type": "absolute_value", "metric_name": "revenue", "claimed_value": 94900, "claimed_unit": "USD_millions", "comparison_basis": null, "gaap_type": "ambiguous", "extraction_confidence": 0.95, "verifiable_against_sec_filings": true}]}
+`;
 
 export const EXTRACTION_OUTPUT_SCHEMA = {
   type: "object" as const,
@@ -145,6 +189,9 @@ export const EXTRACTION_OUTPUT_SCHEMA = {
             minimum: 0,
             maximum: 1,
           },
+          verifiable_against_sec_filings: {
+            type: "boolean" as const,
+          },
         },
         required: [
           "exact_quote",
@@ -157,6 +204,7 @@ export const EXTRACTION_OUTPUT_SCHEMA = {
           "claimed_unit",
           "gaap_type",
           "extraction_confidence",
+          "verifiable_against_sec_filings",
         ],
       },
     },

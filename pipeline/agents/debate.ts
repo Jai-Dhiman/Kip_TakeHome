@@ -1,5 +1,6 @@
-import Anthropic from "@anthropic-ai/sdk";
 import { Annotation, StateGraph, START, END } from "@langchain/langgraph";
+import type { LLMClient } from "../ai/llm-client";
+import { AnthropicClient } from "../ai/anthropic-client";
 import type {
   CredibilityScore,
   Debate,
@@ -10,12 +11,17 @@ import type {
 import {
   BEAR_SYSTEM_PROMPT,
   BULL_SYSTEM_PROMPT,
+  JUDGE_JSON_INSTRUCTION,
   JUDGE_OUTPUT_SCHEMA,
   JUDGE_SYSTEM_PROMPT,
 } from "../prompts/debate";
 
-const DEFAULT_MODEL = "claude-sonnet-4-20250514";
 const DEFAULT_ROUNDS = 2;
+
+// Store LLM clients outside LangGraph state (LangGraph annotations
+// don't handle class instances well). Set before each graph invocation.
+let _debateClient: LLMClient;
+let _judgeClient: LLMClient;
 
 const DebateState = Annotation.Root({
   ticker: Annotation<string>,
@@ -99,7 +105,7 @@ function formatFinancialSummary(
 async function bullAgent(
   state: DebateStateType
 ): Promise<Partial<DebateStateType>> {
-  const client = new Anthropic();
+  const client = _debateClient;
 
   const roundNum = state.current_round;
   let context = `Company: ${state.ticker} | Quarter: ${state.quarter_id}\n\n`;
@@ -115,22 +121,21 @@ async function bullAgent(
       ? `Present your initial defense of ${state.ticker} management's credibility based on the earnings call data above.`
       : `Rebut the Bear's argument above. Defend management where the evidence supports it. This is round ${roundNum} of ${state.max_rounds}.`;
 
-  const response = await client.messages.create({
-    model: DEFAULT_MODEL,
-    max_tokens: 2048,
-    system: BULL_SYSTEM_PROMPT,
-    messages: [{ role: "user", content: context + prompt }],
-  });
+  const text = await client.chat(
+    [
+      { role: "system", content: BULL_SYSTEM_PROMPT },
+      { role: "user", content: context + prompt },
+    ],
+    2048
+  );
 
-  const text =
-    response.content[0]?.type === "text" ? response.content[0].text : "";
   return { bull_arguments: [text] };
 }
 
 async function bearAgent(
   state: DebateStateType
 ): Promise<Partial<DebateStateType>> {
-  const client = new Anthropic();
+  const client = _debateClient;
 
   const roundNum = state.current_round;
   let context = `Company: ${state.ticker} | Quarter: ${state.quarter_id}\n\n`;
@@ -151,22 +156,21 @@ async function bearAgent(
       ? `Present your prosecution of ${state.ticker} management's credibility. Identify patterns of misleading behavior.`
       : `Rebut the Bull's defense. Strengthen your case against management. This is round ${roundNum} of ${state.max_rounds}.`;
 
-  const response = await client.messages.create({
-    model: DEFAULT_MODEL,
-    max_tokens: 2048,
-    system: BEAR_SYSTEM_PROMPT,
-    messages: [{ role: "user", content: context + prompt }],
-  });
+  const text = await client.chat(
+    [
+      { role: "system", content: BEAR_SYSTEM_PROMPT },
+      { role: "user", content: context + prompt },
+    ],
+    2048
+  );
 
-  const text =
-    response.content[0]?.type === "text" ? response.content[0].text : "";
   return { bear_arguments: [text], current_round: roundNum + 1 };
 }
 
 async function judgeAgent(
   state: DebateStateType
 ): Promise<Partial<DebateStateType>> {
-  const client = new Anthropic();
+  const client = _judgeClient;
 
   let debateTranscript = `Company: ${state.ticker} | Quarter: ${state.quarter_id}\n\n`;
   debateTranscript += "UNDERLYING DATA:\n" + state.claims_context + "\n\n";
@@ -183,42 +187,46 @@ async function judgeAgent(
   const prompt =
     "Based on the debate above and the underlying data, produce your credibility verdict. Return your assessment as JSON matching the required schema.";
 
-  const response = await client.messages.create({
-    model: DEFAULT_MODEL,
-    max_tokens: 4096,
-    system: JUDGE_SYSTEM_PROMPT,
-    tools: [
-      {
-        name: "submit_verdict",
-        description: "Submit the judge's credibility verdict with scores.",
-        input_schema: JUDGE_OUTPUT_SCHEMA as Anthropic.Tool.InputSchema,
-      },
-    ],
-    tool_choice: { type: "tool", name: "submit_verdict" },
-    messages: [
-      { role: "user", content: debateTranscript + "\n\n" + prompt },
-    ],
-  });
-
   let scores: Record<string, number> = {};
   let verdict = "";
 
-  for (const block of response.content) {
-    if (block.type === "tool_use" && block.name === "submit_verdict") {
-      const input = block.input as Record<string, unknown>;
-      scores = {
-        accuracy_score: (input.accuracy_score as number) ?? 50,
-        framing_score: (input.framing_score as number) ?? 50,
-        consistency_score: (input.consistency_score as number) ?? 50,
-        transparency_score: (input.transparency_score as number) ?? 50,
-        overall_score: (input.overall_score as number) ?? 50,
-      };
-      verdict = (input.verdict as string) ?? "";
-      break;
-    }
-  }
+  try {
+    let result: Record<string, unknown>;
 
-  if (Object.keys(scores).length === 0) {
+    if (client instanceof AnthropicClient) {
+      result = await client.chatJSON<Record<string, unknown>>(
+        [
+          { role: "system", content: JUDGE_SYSTEM_PROMPT },
+          { role: "user", content: debateTranscript + "\n\n" + prompt },
+        ],
+        4096,
+        "submit_verdict",
+        "Submit the judge's credibility verdict with scores.",
+        JUDGE_OUTPUT_SCHEMA
+      );
+    } else {
+      result = await client.chatJSON<Record<string, unknown>>(
+        [
+          {
+            role: "system",
+            content: JUDGE_SYSTEM_PROMPT + JUDGE_JSON_INSTRUCTION,
+          },
+          { role: "user", content: debateTranscript + "\n\n" + prompt },
+        ],
+        4096
+      );
+    }
+
+    scores = {
+      accuracy_score: (result.accuracy_score as number) ?? 50,
+      framing_score: (result.framing_score as number) ?? 50,
+      consistency_score: (result.consistency_score as number) ?? 50,
+      transparency_score: (result.transparency_score as number) ?? 50,
+      overall_score: (result.overall_score as number) ?? 50,
+    };
+    verdict = (result.verdict as string) ?? "";
+  } catch (e) {
+    console.warn(`Judge structured output failed, using defaults: ${e}`);
     verdict = "Unable to produce structured verdict.";
     scores = {
       accuracy_score: 50,
@@ -278,8 +286,14 @@ export async function runDebate(
   assessments: MisleadingAssessment[],
   financialMetrics: Record<string, number | null>,
   omittedMetrics: string[],
+  debateClient: LLMClient,
+  judgeClient: LLMClient,
   maxRounds: number = DEFAULT_ROUNDS
 ): Promise<[Debate, CredibilityScore]> {
+  // Set the module-level clients for graph node functions
+  _debateClient = debateClient;
+  _judgeClient = judgeClient;
+
   const graph = buildDebateGraph();
   const compiled = graph.compile();
 
@@ -314,16 +328,16 @@ export async function runDebate(
     rounds: maxRounds,
   };
 
-  const scores = result.judge_scores;
+  const debateScores = result.judge_scores;
   const vCounts = countVerdicts(verifications);
 
   const credibilityScore: CredibilityScore = {
     quarter_id: quarterId,
-    overall_score: scores.overall_score ?? 50,
-    accuracy_score: scores.accuracy_score ?? 50,
-    framing_score: scores.framing_score ?? 50,
-    consistency_score: scores.consistency_score ?? 50,
-    transparency_score: scores.transparency_score ?? 50,
+    overall_score: debateScores.overall_score ?? 50,
+    accuracy_score: debateScores.accuracy_score ?? 50,
+    framing_score: debateScores.framing_score ?? 50,
+    consistency_score: debateScores.consistency_score ?? 50,
+    transparency_score: debateScores.transparency_score ?? 50,
     total_claims: claims.length,
     verified_claims: vCounts.verified ?? 0,
     inaccurate_claims: vCounts.inaccurate ?? 0,

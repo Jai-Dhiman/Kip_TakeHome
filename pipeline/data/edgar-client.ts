@@ -69,19 +69,22 @@ export class EdgarClient {
       return this.computeMetric(ticker, fiscalYear, fiscalQuarter, metric);
     }
 
-    const periodEnd = fiscalQuarterEndDate(ticker, fiscalYear, fiscalQuarter);
-    const formType = fiscalQuarter === 4 ? "10-K" : "10-Q";
+    // Q4 uses 10-K filings and needs special handling
+    if (fiscalQuarter === 4) {
+      return this.fetchQ4Metric(ticker, fiscalYear, metric);
+    }
 
-    // Try each XBRL concept until we find data
+    // Q1-Q3: standard 10-Q lookup
+    const periodEnd = fiscalQuarterEndDate(ticker, fiscalYear, fiscalQuarter);
+
     for (const concept of metric.xbrlConcepts) {
       const data = await this.fetchConceptData(ticker, concept);
       if (data === null) continue;
 
-      // Find matching entry
       const match = this.findMatchingEntry(
         data,
         periodEnd,
-        formType,
+        "10-Q",
         fiscalQuarter
       );
       if (match !== null) return match;
@@ -90,7 +93,161 @@ export class EdgarClient {
     return null;
   }
 
-  private async fetchConceptData(
+  private async fetchQ4Metric(
+    ticker: string,
+    fiscalYear: number,
+    metric: MetricMapping
+  ): Promise<number | null> {
+    const periodEnd = fiscalQuarterEndDate(ticker, fiscalYear, 4);
+
+    // Balance sheet items are point-in-time snapshots: use 10-K value directly
+    if (metric.isPointInTime) {
+      for (const concept of metric.xbrlConcepts) {
+        const data = await this.fetchConceptData(ticker, concept);
+        if (data === null) continue;
+
+        const match = this.findMatchingEntry(data, periodEnd, "10-K", 4);
+        if (match !== null) return match;
+      }
+      return null;
+    }
+
+    // Income/cash flow: first try finding a quarterly entry inside the 10-K
+    for (const concept of metric.xbrlConcepts) {
+      const data = await this.fetchConceptData(ticker, concept);
+      if (data === null) continue;
+
+      const quarterlyEntry = this.findQuarterlyEntryIn10K(data, periodEnd);
+      if (quarterlyEntry !== null) return quarterlyEntry;
+    }
+
+    // Fall back to decomposition: annual - Q1 - Q2 - Q3
+    return this.computeQ4ByDecomposition(ticker, fiscalYear, metric);
+  }
+
+  findQuarterlyEntryIn10K(
+    entries: CompanyConceptEntry[],
+    periodEnd: Date
+  ): number | null {
+    const toleranceDays = 5;
+
+    for (const entry of entries) {
+      if (entry.form !== "10-K") continue;
+      if (!entry.start) continue;
+
+      const endDate = new Date(entry.end);
+      const daysDiff = Math.abs(
+        (endDate.getTime() - periodEnd.getTime()) / (1000 * 60 * 60 * 24)
+      );
+      if (daysDiff > toleranceDays) continue;
+
+      // Check for quarterly span (~80-100 days)
+      const startDate = new Date(entry.start);
+      const spanDays =
+        (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24);
+      if (spanDays >= 80 && spanDays <= 100) {
+        return entry.val;
+      }
+    }
+
+    return null;
+  }
+
+  async computeQ4ByDecomposition(
+    ticker: string,
+    fiscalYear: number,
+    metric: MetricMapping
+  ): Promise<number | null> {
+    // Per-share metrics are not additive across quarters
+    if (metric.unit === "USD/share" || metric.unit === "shares") {
+      return null;
+    }
+
+    // Fetch annual value from 10-K
+    const annualValue = await this.fetchAnnualFromTenK(
+      ticker,
+      fiscalYear,
+      metric
+    );
+    if (annualValue === null) return null;
+
+    // Fetch Q1, Q2, Q3 from 10-Q filings directly
+    const q1 = await this.fetchQuarterDirect(ticker, fiscalYear, 1, metric);
+    const q2 = await this.fetchQuarterDirect(ticker, fiscalYear, 2, metric);
+    const q3 = await this.fetchQuarterDirect(ticker, fiscalYear, 3, metric);
+
+    if (q1 === null || q2 === null || q3 === null) return null;
+
+    return annualValue - q1 - q2 - q3;
+  }
+
+  private async fetchAnnualFromTenK(
+    ticker: string,
+    fiscalYear: number,
+    metric: MetricMapping
+  ): Promise<number | null> {
+    const periodEnd = fiscalQuarterEndDate(ticker, fiscalYear, 4);
+
+    for (const concept of metric.xbrlConcepts) {
+      const data = await this.fetchConceptData(ticker, concept);
+      if (data === null) continue;
+
+      const match = this.findAnnualEntryIn10K(data, periodEnd);
+      if (match !== null) return match;
+    }
+
+    return null;
+  }
+
+  findAnnualEntryIn10K(
+    entries: CompanyConceptEntry[],
+    periodEnd: Date
+  ): number | null {
+    const toleranceDays = 5;
+
+    for (const entry of entries) {
+      if (entry.form !== "10-K") continue;
+
+      const endDate = new Date(entry.end);
+      const daysDiff = Math.abs(
+        (endDate.getTime() - periodEnd.getTime()) / (1000 * 60 * 60 * 24)
+      );
+      if (daysDiff > toleranceDays) continue;
+
+      // Annual entry: either span >350 days or fp === "FY"
+      if (entry.fp === "FY") return entry.val;
+
+      if (entry.start) {
+        const startDate = new Date(entry.start);
+        const spanDays =
+          (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24);
+        if (spanDays > 350) return entry.val;
+      }
+    }
+
+    return null;
+  }
+
+  private async fetchQuarterDirect(
+    ticker: string,
+    fiscalYear: number,
+    quarter: number,
+    metric: MetricMapping
+  ): Promise<number | null> {
+    const periodEnd = fiscalQuarterEndDate(ticker, fiscalYear, quarter);
+
+    for (const concept of metric.xbrlConcepts) {
+      const data = await this.fetchConceptData(ticker, concept);
+      if (data === null) continue;
+
+      const match = this.findMatchingEntry(data, periodEnd, "10-Q", quarter);
+      if (match !== null) return match;
+    }
+
+    return null;
+  }
+
+  async fetchConceptData(
     ticker: string,
     concept: string
   ): Promise<CompanyConceptEntry[] | null> {
@@ -142,13 +299,12 @@ export class EdgarClient {
     }
   }
 
-  private findMatchingEntry(
+  findMatchingEntry(
     entries: CompanyConceptEntry[],
     periodEnd: Date,
     formType: string,
     fiscalQuarter: number
   ): number | null {
-    const targetDate = this.formatDate(periodEnd);
     const toleranceDays = 5;
 
     // Try exact form type match first

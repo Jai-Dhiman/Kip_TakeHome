@@ -93,6 +93,26 @@ If the Bear's arguments are stronger, reflect that in scores. If the Bull's defe
 
 ${MISLEADING_TAXONOMY_REFERENCE}`;
 
+export const JUDGE_JSON_INSTRUCTION = `
+
+You MUST respond with valid JSON only. No markdown, no explanation, no text outside the JSON object.
+
+Return a JSON object with these fields:
+- "accuracy_score" (number, 0-100): How factually correct were management's claims?
+- "framing_score" (number, 0-100): Did management present data in a balanced way?
+- "consistency_score" (number, 0-100): Is the narrative consistent with prior quarters?
+- "transparency_score" (number, 0-100): Did management discuss both good and bad news?
+- "overall_score" (number, 0-100): Overall credibility score
+- "verdict" (string): Your balanced verdict explaining reasoning
+- "strongest_bull_point" (string): The strongest argument in management's defense
+- "strongest_bear_point" (string): The strongest argument against management
+- "most_concerning_finding" (string or null): Single most concerning finding, if any
+- "strongest_transparency_evidence" (string or null): Strongest evidence of transparency, if any
+
+Example response format:
+{"accuracy_score": 75, "framing_score": 60, "consistency_score": 70, "transparency_score": 55, "overall_score": 65, "verdict": "...", "strongest_bull_point": "...", "strongest_bear_point": "...", "most_concerning_finding": "...", "strongest_transparency_evidence": "..."}
+`;
+
 export const JUDGE_OUTPUT_SCHEMA = {
   type: "object" as const,
   properties: {

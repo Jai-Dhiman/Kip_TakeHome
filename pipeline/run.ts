@@ -9,6 +9,7 @@ import type {
   MisleadingAssessment,
   VerificationResult,
 } from "~/lib/types";
+import { createPipelineClients, type PipelineClients, type LLMProvider } from "./ai";
 import { extractClaims } from "./agents/extraction";
 import { VerificationEngine } from "./agents/verification";
 import { detectOmissions } from "./agents/omission-detector";
@@ -16,7 +17,7 @@ import { runDebate } from "./agents/debate";
 import { Cache } from "./data/cache";
 import { COMPANIES } from "./data/companies";
 import { EdgarClient } from "./data/edgar-client";
-import { FinnhubClient } from "./data/finnhub-client";
+import { AlphaVantageClient } from "./data/alphavantage-client";
 import { fiscalQuarterEndDate, getRecentQuarters } from "./data/fiscal-calendar";
 
 const RESULTS_DB_PATH = join(import.meta.dir, "..", "results", "execcheck_results.db");
@@ -61,9 +62,17 @@ function initResultsDb(dbPath: string = RESULTS_DB_PATH): Database {
       claimed_unit TEXT NOT NULL,
       comparison_basis TEXT,
       gaap_type TEXT NOT NULL,
-      extraction_confidence REAL NOT NULL
+      extraction_confidence REAL NOT NULL,
+      verifiable_against_sec_filings INTEGER NOT NULL DEFAULT 1
     )
   `);
+
+  // Migration for existing databases
+  try {
+    db.run(`ALTER TABLE claims ADD COLUMN verifiable_against_sec_filings INTEGER NOT NULL DEFAULT 1`);
+  } catch {
+    // Column already exists
+  }
   db.run(`
     CREATE TABLE IF NOT EXISTS verifications (
       claim_id TEXT PRIMARY KEY REFERENCES claims(id),
@@ -134,13 +143,14 @@ function storeResults(
   );
 
   const insertClaim = db.prepare(
-    `INSERT OR REPLACE INTO claims (id, quarter_id, speaker_name, speaker_role, session, exact_quote, claim_type, metric_name, claimed_value, claimed_unit, comparison_basis, gaap_type, extraction_confidence) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT OR REPLACE INTO claims (id, quarter_id, speaker_name, speaker_role, session, exact_quote, claim_type, metric_name, claimed_value, claimed_unit, comparison_basis, gaap_type, extraction_confidence, verifiable_against_sec_filings) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
   for (const c of claims) {
     insertClaim.run(
       c.id, c.quarter_id, c.speaker_name, c.speaker_role, c.session,
       c.exact_quote, c.claim_type, c.metric_name, c.claimed_value,
-      c.claimed_unit, c.comparison_basis, c.gaap_type, c.extraction_confidence
+      c.claimed_unit, c.comparison_basis, c.gaap_type, c.extraction_confidence,
+      c.verifiable_against_sec_filings ? 1 : 0
     );
   }
 
@@ -182,18 +192,19 @@ async function processQuarter(
   fiscalYear: number,
   fiscalQuarter: number,
   cache: Cache,
-  resultsDb: Database
+  resultsDb: Database,
+  clients: PipelineClients
 ): Promise<boolean> {
   const quarterId = `${ticker}-FY${fiscalYear}Q${fiscalQuarter}`;
   console.log(`Processing ${quarterId}...`);
 
   const edgar = new EdgarClient(cache);
-  const finnhub = new FinnhubClient(cache);
+  const av = new AlphaVantageClient(cache);
   const verifier = new VerificationEngine(edgar);
 
   // Step 1: Fetch transcript
   console.log("  Fetching transcript...");
-  const transcript = await finnhub.getTranscript(ticker, fiscalYear, fiscalQuarter);
+  const transcript = await av.getTranscript(ticker, fiscalYear, fiscalQuarter);
   if (transcript === null) {
     console.warn(`  No transcript available for ${quarterId}, skipping.`);
     return false;
@@ -201,7 +212,7 @@ async function processQuarter(
 
   // Step 2: Extract claims
   console.log("  Extracting claims...");
-  const claims = await extractClaims(transcript);
+  const claims = await extractClaims(transcript, clients.extraction);
   console.log(`  Extracted ${claims.length} claims`);
 
   if (claims.length === 0) {
@@ -209,11 +220,29 @@ async function processQuarter(
     return false;
   }
 
-  // Step 3: Verify claims
+  // Step 3: Split claims by verifiability and verify
+  const verifiableClaims = claims.filter(c => c.verifiable_against_sec_filings);
+  const nonVerifiableClaims = claims.filter(c => !c.verifiable_against_sec_filings);
+  console.log(`  Verifiable: ${verifiableClaims.length}, Not verifiable: ${nonVerifiableClaims.length}`);
+
   console.log("  Verifying claims...");
-  const [verifications, assessments] = await verifier.verifyAllClaims(
-    claims, ticker, fiscalYear, fiscalQuarter
+  const [verifiableVerifications, assessments] = await verifier.verifyAllClaims(
+    verifiableClaims, ticker, fiscalYear, fiscalQuarter
   );
+
+  // Create "not_verified" entries for non-verifiable claims
+  const nonVerifiableVerifications: VerificationResult[] = nonVerifiableClaims.map(c => ({
+    claim_id: c.id,
+    status: "not_verified" as const,
+    actual_value: null,
+    deviation_absolute: null,
+    deviation_percentage: null,
+    edgar_concept: null,
+    data_source: null,
+    notes: "Claim is not verifiable against SEC filings (segment metric, KPI, or guidance)",
+  }));
+
+  const verifications = [...verifiableVerifications, ...nonVerifiableVerifications];
 
   // Step 4: Detect omissions
   console.log("  Detecting omissions...");
@@ -225,10 +254,10 @@ async function processQuarter(
   console.log("  Fetching financial context...");
   const allMetrics = await edgar.getAllMetrics(ticker, fiscalYear, fiscalQuarter);
 
-  // Step 6: Run debate
+  // Step 6: Run debate (only with verifiable claims and their verifications)
   console.log("  Running debate round...");
   const [debate, score] = await runDebate(
-    ticker, quarterId, claims, verifications, assessments, allMetrics, omitted
+    ticker, quarterId, verifiableClaims, verifiableVerifications, assessments, allMetrics, omitted, clients.debate, clients.judge
   );
 
   // Step 7: Store results
@@ -313,9 +342,13 @@ async function seedD1(dbPath: string = RESULTS_DB_PATH): Promise<void> {
 
 async function runPipeline(
   tickers?: string[],
-  numQuarters: number = 4
+  numQuarters: number = 4,
+  llmProvider?: LLMProvider
 ): Promise<void> {
   const targetTickers = tickers ?? COMPANIES.map((c) => c.ticker);
+
+  const clients = createPipelineClients(llmProvider);
+  console.log(`Using LLM provider: ${llmProvider ?? "hybrid (default)"}`);
 
   const cache = new Cache();
   const resultsDb = initResultsDb();
@@ -343,7 +376,7 @@ async function runPipeline(
     for (const q of quarters) {
       total += 1;
       try {
-        if (await processQuarter(ticker, q.fiscal_year, q.fiscal_quarter, cache, resultsDb)) {
+        if (await processQuarter(ticker, q.fiscal_year, q.fiscal_quarter, cache, resultsDb, clients)) {
           success += 1;
         }
       } catch (e) {
@@ -378,6 +411,9 @@ if (args.includes("--seed")) {
   }
   db.close();
 } else {
+  const llmProvider: LLMProvider | undefined = args.includes("--anthropic")
+    ? "anthropic"
+    : undefined;
   const tickers = args.filter((a) => !a.startsWith("--"));
-  await runPipeline(tickers.length > 0 ? tickers : undefined);
+  await runPipeline(tickers.length > 0 ? tickers : undefined, 4, llmProvider);
 }

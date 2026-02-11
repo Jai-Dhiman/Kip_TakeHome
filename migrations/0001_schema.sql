@@ -30,7 +30,8 @@ CREATE TABLE IF NOT EXISTS claims (
   claimed_unit TEXT NOT NULL,
   comparison_basis TEXT,
   gaap_type TEXT NOT NULL,
-  extraction_confidence REAL NOT NULL
+  extraction_confidence REAL NOT NULL,
+  verifiable_against_sec_filings INTEGER NOT NULL DEFAULT 1
 );
 
 CREATE TABLE IF NOT EXISTS verifications (

@@ -29,11 +29,12 @@ export interface Claim {
   comparison_basis: string | null;
   gaap_type: "gaap" | "non_gaap" | "ambiguous";
   extraction_confidence: number;
+  verifiable_against_sec_filings: boolean;
 }
 
 export interface Verification {
   claim_id: string;
-  status: "verified" | "inaccurate" | "misleading" | "unverifiable";
+  status: "verified" | "inaccurate" | "misleading" | "unverifiable" | "not_verified";
   actual_value: number | null;
   deviation_absolute: number | null;
   deviation_percentage: number | null;
@@ -99,6 +100,7 @@ export const VERDICT_COLORS: Record<Verification["status"], string> = {
   inaccurate: "#B54A32",
   misleading: "#C48B20",
   unverifiable: "#7A8599",
+  not_verified: "#A0AEC0",
 };
 
 export const VERDICT_LABELS: Record<Verification["status"], string> = {
@@ -106,6 +108,7 @@ export const VERDICT_LABELS: Record<Verification["status"], string> = {
   inaccurate: "Inaccurate",
   misleading: "Misleading",
   unverifiable: "Unverifiable",
+  not_verified: "Not Verified",
 };
 
 // --- Pipeline-specific types ---
