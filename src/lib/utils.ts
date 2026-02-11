@@ -3,11 +3,11 @@ export function formatScore(score: number): string {
 }
 
 export function scoreColor(score: number): string {
-  if (score >= 90) return "#22c55e";
-  if (score >= 70) return "#84cc16";
-  if (score >= 50) return "#f59e0b";
-  if (score >= 30) return "#f97316";
-  return "#ef4444";
+  if (score >= 90) return "#2D7A4F";
+  if (score >= 70) return "#348F6C";
+  if (score >= 50) return "#C48B20";
+  if (score >= 30) return "#C47320";
+  return "#B54A32";
 }
 
 export function scoreLabel(score: number): string {

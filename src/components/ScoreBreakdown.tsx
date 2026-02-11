@@ -19,28 +19,28 @@ export function ScoreBreakdown({
   ];
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       {dimensions.map((dim) => (
         <div key={dim.label} className="group">
-          <div className="flex items-center justify-between mb-1">
-            <div>
-              <span className="text-sm font-medium text-zinc-300">
+          <div className="flex items-baseline justify-between mb-1.5">
+            <div className="flex items-baseline gap-2">
+              <span className="text-sm font-sans font-semibold text-ink-900">
                 {dim.label}
               </span>
-              <span className="ml-2 text-xs text-zinc-600 hidden group-hover:inline">
+              <span className="text-[11px] font-sans text-ink-300 hidden group-hover:inline">
                 {dim.description}
               </span>
             </div>
             <span
-              className="text-sm font-bold tabular-nums"
+              className="font-mono text-sm font-bold"
               style={{ color: scoreColor(dim.value) }}
             >
               {Math.round(dim.value)}
             </span>
           </div>
-          <div className="h-2 rounded-full bg-zinc-800 overflow-hidden">
+          <div className="score-bar">
             <div
-              className="h-full rounded-full transition-all duration-700 ease-out"
+              className="score-bar-fill"
               style={{
                 width: `${dim.value}%`,
                 backgroundColor: scoreColor(dim.value),

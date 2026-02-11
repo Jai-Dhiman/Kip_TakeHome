@@ -28,11 +28,11 @@ function QuarterDetail() {
   if (!data) {
     return (
       <div className="text-center py-20">
-        <h2 className="text-xl text-zinc-400">Quarter not found</h2>
+        <h2 className="text-xl font-serif text-ink-400">Quarter not found</h2>
         <Link
           to="/companies/$ticker"
           params={{ ticker }}
-          className="text-emerald-400 hover:underline mt-2 inline-block"
+          className="text-rust-500 link-underline mt-2 inline-block font-sans text-sm"
         >
           Back to company
         </Link>
@@ -56,96 +56,105 @@ function QuarterDetail() {
 
   return (
     <div className="mt-8 space-y-8">
-      {/* Header */}
+      {/* Breadcrumb */}
       <div>
-        <div className="flex items-center gap-2 text-xs text-zinc-500 mb-3">
-          <Link to="/" className="hover:text-zinc-300 transition-colors">
-            Dashboard
-          </Link>
-          <span className="text-zinc-700">/</span>
-          <Link
-            to="/companies/$ticker"
-            params={{ ticker }}
-            className="hover:text-zinc-300 transition-colors"
-          >
-            {ticker}
-          </Link>
-          <span className="text-zinc-700">/</span>
-          <span className="text-zinc-400">
-            {formatQuarter(quarter.fiscal_year, quarter.fiscal_quarter)}
-          </span>
-        </div>
+        <Link to="/" className="breadcrumb-link">
+          Dashboard
+        </Link>
+        <span className="breadcrumb-sep">/</span>
+        <Link
+          to="/companies/$ticker"
+          params={{ ticker }}
+          className="breadcrumb-link"
+        >
+          {ticker}
+        </Link>
+        <span className="breadcrumb-sep">/</span>
+        <span className="text-xs font-sans font-medium text-ink-900">
+          {formatQuarter(quarter.fiscal_year, quarter.fiscal_quarter)}
+        </span>
+      </div>
 
+      {/* Header */}
+      <header>
         <div className="flex items-start justify-between">
           <div>
-            <h2 className="text-2xl font-bold text-white">
+            <h2 className="text-2xl font-serif text-ink-900">
               {formatQuarter(quarter.fiscal_year, quarter.fiscal_quarter)}
             </h2>
-            <p className="text-sm text-zinc-500">
+            <p className="text-sm font-sans text-ink-400 mt-1">
               Period ending {quarter.period_end_date}
               {quarter.transcript_date &&
                 ` | Earnings call: ${quarter.transcript_date}`}
             </p>
           </div>
-          {score && <CredibilityGauge score={score.overall_score} size={72} />}
+          {score && <CredibilityGauge score={score.overall_score} size={68} />}
         </div>
-      </div>
+        <hr className="rule-line-strong mt-3" />
+      </header>
 
       {/* Score Breakdown */}
       {score && (
-        <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-6">
-          <h3 className="text-sm font-medium text-zinc-400 uppercase tracking-wider mb-4">
+        <section className="surface-elevated p-6">
+          <h3 className="text-lg font-serif text-ink-900 mb-4">
             Credibility Assessment
           </h3>
+          <hr className="rule-line mb-4" />
           <ScoreBreakdown
             accuracy={score.accuracy_score}
             framing={score.framing_score}
             consistency={score.consistency_score}
             transparency={score.transparency_score}
           />
-        </div>
+        </section>
       )}
 
       {/* The Debate */}
       {debate && (
-        <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-6">
-          <h3 className="text-sm font-medium text-zinc-400 uppercase tracking-wider mb-4">
+        <section className="surface-elevated p-6">
+          <h3 className="text-lg font-serif text-ink-900 mb-4">
             The Debate: Bull vs Bear
           </h3>
+          <hr className="rule-line mb-4" />
           <DebateView debate={debate} />
-        </div>
+        </section>
       )}
 
-      {/* What They're Not Telling You */}
+      {/* Omissions */}
       {omissions.length > 0 && (
-        <div className="rounded-xl border border-amber-900/50 bg-amber-950/20 p-6">
-          <h3 className="text-sm font-medium text-amber-400 uppercase tracking-wider mb-3">
+        <section className="p-6 bg-white border border-parchment-300" style={{ borderLeftWidth: 3, borderLeftColor: "#C48B20" }}>
+          <h3 className="text-lg font-serif text-ink-900 mb-3">
             What They're Not Telling You
           </h3>
+          <hr className="rule-line mb-3" />
           <div className="space-y-2">
             {omissions.map((omission, i) => (
               <OmissionAlert key={i} text={omission} />
             ))}
           </div>
-        </div>
+        </section>
       )}
 
       {/* Claims */}
-      <div className="space-y-6">
-        <h3 className="text-sm font-medium text-zinc-400 uppercase tracking-wider">
-          All Claims ({claims.length})
-        </h3>
+      <section className="space-y-4">
+        <div className="flex items-baseline justify-between">
+          <h3 className="text-lg font-serif text-ink-900">
+            All Claims
+          </h3>
+          <span className="font-mono text-sm text-ink-300">{claims.length} total</span>
+        </div>
+        <hr className="rule-line-strong" />
 
         {/* Summary badges */}
-        <div className="flex flex-wrap gap-2">
-          <Badge color="#22c55e" label="Verified" count={statusCounts.verified ?? 0} />
-          <Badge color="#ef4444" label="Inaccurate" count={statusCounts.inaccurate ?? 0} />
-          <Badge color="#f59e0b" label="Misleading" count={statusCounts.misleading ?? 0} />
-          <Badge color="#94a3b8" label="Unverifiable" count={statusCounts.unverifiable ?? 0} />
+        <div className="flex flex-wrap gap-2 pt-2">
+          <Badge color="#2D7A4F" label="Verified" count={statusCounts.verified ?? 0} />
+          <Badge color="#B54A32" label="Inaccurate" count={statusCounts.inaccurate ?? 0} />
+          <Badge color="#C48B20" label="Misleading" count={statusCounts.misleading ?? 0} />
+          <Badge color="#7A8599" label="Unverifiable" count={statusCounts.unverifiable ?? 0} />
         </div>
 
         <ClaimsTable claims={claims} />
-      </div>
+      </section>
     </div>
   );
 }
@@ -161,15 +170,15 @@ function Badge({
 }) {
   return (
     <span
-      className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium"
+      className="verdict-badge"
       style={{
-        backgroundColor: `${color}15`,
+        backgroundColor: `${color}10`,
         color,
-        border: `1px solid ${color}30`,
+        border: `1px solid ${color}20`,
       }}
     >
-      <span className="font-bold tabular-nums">{count}</span>
-      {label}
+      <span className="font-mono font-bold">{count}</span>
+      <span className="font-sans">{label}</span>
     </span>
   );
 }

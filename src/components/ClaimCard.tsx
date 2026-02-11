@@ -8,37 +8,35 @@ export function ClaimCard({ claim }: { claim: ClaimWithVerification }) {
 
   return (
     <div
-      className="rounded-lg border bg-zinc-900/50 p-4"
-      style={{ borderColor: `${color}30` }}
+      className="bg-white border border-parchment-300 p-4"
+      style={{ borderLeftWidth: 3, borderLeftColor: color }}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
-          {/* Quote */}
-          <blockquote className="text-sm text-zinc-300 italic border-l-2 pl-3 mb-2"
-            style={{ borderColor: `${color}60` }}
+          <blockquote
+            className="text-[13px] text-ink-700 italic font-sans leading-relaxed mb-2 pl-3"
+            style={{ borderLeft: `2px solid ${color}40` }}
           >
             "{claim.exact_quote}"
           </blockquote>
 
-          {/* Speaker */}
-          <div className="text-xs text-zinc-500 mb-2">
+          <div className="text-[11px] text-ink-400 font-sans mb-2">
             -- {claim.speaker_name} ({claim.speaker_role}),{" "}
             {claim.session === "prepared_remarks" ? "Prepared Remarks" : "Q&A"}
           </div>
 
-          {/* What they said vs actual */}
-          <div className="flex flex-wrap gap-4 text-xs">
+          <div className="flex flex-wrap gap-4 text-xs font-sans">
             <div>
-              <span className="text-zinc-600">Claimed: </span>
-              <span className="text-zinc-300 font-medium tabular-nums">
+              <span className="text-ink-300">Claimed: </span>
+              <span className="font-mono font-medium text-ink-700">
                 {formatClaimedValue(claim)}
               </span>
             </div>
             {claim.verification?.actual_value !== null &&
               claim.verification?.actual_value !== undefined && (
                 <div>
-                  <span className="text-zinc-600">Actual: </span>
-                  <span className="font-medium tabular-nums" style={{ color }}>
+                  <span className="text-ink-300">Actual: </span>
+                  <span className="font-mono font-medium" style={{ color }}>
                     {claim.verification.actual_value.toFixed(2)}
                   </span>
                 </div>
@@ -46,15 +44,14 @@ export function ClaimCard({ claim }: { claim: ClaimWithVerification }) {
             {claim.verification?.deviation_percentage !== null &&
               claim.verification?.deviation_percentage !== undefined && (
                 <div>
-                  <span className="text-zinc-600">Deviation: </span>
-                  <span className="font-medium tabular-nums" style={{ color }}>
+                  <span className="text-ink-300">Deviation: </span>
+                  <span className="font-mono font-medium" style={{ color }}>
                     {claim.verification.deviation_percentage.toFixed(1)}%
                   </span>
                 </div>
               )}
           </div>
 
-          {/* Misleading tactics */}
           {claim.misleading && (
             <div className="mt-2">
               <div className="flex flex-wrap gap-1">
@@ -62,27 +59,31 @@ export function ClaimCard({ claim }: { claim: ClaimWithVerification }) {
                   (tactic) => (
                     <span
                       key={tactic}
-                      className="rounded-full bg-amber-950/50 border border-amber-800/30 px-2 py-0.5 text-[10px] text-amber-400"
+                      className="font-sans text-[10px] font-medium uppercase tracking-wider px-1.5 py-0.5"
+                      style={{
+                        backgroundColor: "#C48B2015",
+                        color: "#C48B20",
+                        border: "1px solid #C48B2030",
+                      }}
                     >
                       {tactic.replace(/_/g, " ")}
                     </span>
                   )
                 )}
               </div>
-              <p className="mt-1 text-xs text-zinc-500">
+              <p className="mt-1 text-[11px] text-ink-400 font-sans">
                 {claim.misleading.explanation}
               </p>
             </div>
           )}
         </div>
 
-        {/* Verdict badge */}
         <span
-          className="shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider"
+          className="verdict-badge shrink-0"
           style={{
-            backgroundColor: `${color}15`,
+            backgroundColor: `${color}12`,
             color,
-            border: `1px solid ${color}30`,
+            border: `1px solid ${color}25`,
           }}
         >
           {label}

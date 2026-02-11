@@ -1,4 +1,4 @@
--- ExecCheck D1 Schema
+-- Kip Takehome D1 Schema
 CREATE TABLE IF NOT EXISTS companies (
   ticker TEXT PRIMARY KEY,
   name TEXT NOT NULL,

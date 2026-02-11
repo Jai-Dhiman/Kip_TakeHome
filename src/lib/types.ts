@@ -95,10 +95,10 @@ export interface QuarterSummary {
 export type ScoreDimension = "accuracy" | "framing" | "consistency" | "transparency";
 
 export const VERDICT_COLORS: Record<Verification["status"], string> = {
-  verified: "#22c55e",
-  inaccurate: "#ef4444",
-  misleading: "#f59e0b",
-  unverifiable: "#94a3b8",
+  verified: "#2D7A4F",
+  inaccurate: "#B54A32",
+  misleading: "#C48B20",
+  unverifiable: "#7A8599",
 };
 
 export const VERDICT_LABELS: Record<Verification["status"], string> = {

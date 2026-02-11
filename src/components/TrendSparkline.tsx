@@ -26,13 +26,10 @@ export function TrendSparkline({
   });
 
   const lastScore = scores[scores.length - 1]!;
-  const prevScore = scores[scores.length - 2]!;
-  const trending = lastScore >= prevScore ? "up" : "down";
   const color = scoreColor(lastScore);
 
   return (
     <svg width={width} height={height} className="overflow-visible">
-      {/* Line */}
       <polyline
         points={points.join(" ")}
         fill="none"
@@ -42,7 +39,6 @@ export function TrendSparkline({
         strokeLinecap="round"
         className="transition-all duration-500"
       />
-      {/* Dots */}
       {scores.map((s, i) => {
         const x = padding + (i / (scores.length - 1)) * innerW;
         const y = padding + innerH - ((s - min) / range) * innerH;
@@ -51,8 +47,8 @@ export function TrendSparkline({
             key={i}
             cx={x}
             cy={y}
-            r={i === scores.length - 1 ? 3 : 2}
-            fill={i === scores.length - 1 ? color : "#52525b"}
+            r={i === scores.length - 1 ? 2.5 : 1.5}
+            fill={i === scores.length - 1 ? color : "#C4B9A6"}
             className="transition-all duration-300"
           />
         );

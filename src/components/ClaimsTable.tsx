@@ -45,11 +45,11 @@ const columns = [
         const label = VERDICT_LABELS[status as keyof typeof VERDICT_LABELS];
         return (
           <span
-            className="rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider whitespace-nowrap"
+            className="verdict-badge"
             style={{
-              backgroundColor: `${color}15`,
+              backgroundColor: `${color}12`,
               color,
-              border: `1px solid ${color}30`,
+              border: `1px solid ${color}25`,
             }}
           >
             {label}
@@ -62,13 +62,13 @@ const columns = [
   columnHelper.accessor("speaker_name", {
     header: "Speaker",
     cell: (info) => (
-      <span className="text-zinc-300 text-xs">{info.getValue()}</span>
+      <span className="text-ink-700 text-xs font-sans">{info.getValue()}</span>
     ),
   }),
   columnHelper.accessor("metric_name", {
     header: "Metric",
     cell: (info) => (
-      <span className="text-zinc-300 text-xs font-medium">
+      <span className="text-ink-900 text-xs font-sans font-medium">
         {info.getValue()}
       </span>
     ),
@@ -76,7 +76,7 @@ const columns = [
   columnHelper.accessor("claimed_value", {
     header: "Claimed",
     cell: (info) => (
-      <span className="text-zinc-300 text-xs tabular-nums">
+      <span className="text-ink-700 font-mono text-xs">
         {formatValue(info.getValue(), info.row.original.claimed_unit)}
       </span>
     ),
@@ -86,9 +86,9 @@ const columns = [
     header: "Actual",
     cell: (info) => {
       const val = info.getValue();
-      if (val === null) return <span className="text-zinc-600 text-xs">--</span>;
+      if (val === null) return <span className="text-parchment-400 text-xs font-mono">--</span>;
       return (
-        <span className="text-zinc-300 text-xs tabular-nums">
+        <span className="text-ink-700 font-mono text-xs">
           {val.toFixed(2)}
         </span>
       );
@@ -102,16 +102,16 @@ const columns = [
       cell: (info) => {
         const val = info.getValue();
         if (val === null)
-          return <span className="text-zinc-600 text-xs">--</span>;
+          return <span className="text-parchment-400 text-xs font-mono">--</span>;
         const absVal = Math.abs(val);
         const color =
           absVal > 10
-            ? "#ef4444"
+            ? "#B54A32"
             : absVal > 5
-              ? "#f59e0b"
-              : "#22c55e";
+              ? "#C48B20"
+              : "#2D7A4F";
         return (
-          <span className="text-xs font-medium tabular-nums" style={{ color }}>
+          <span className="font-mono text-xs font-medium" style={{ color }}>
             {val > 0 ? "+" : ""}
             {val.toFixed(1)}%
           </span>
@@ -122,7 +122,7 @@ const columns = [
   columnHelper.accessor("claim_type", {
     header: "Type",
     cell: (info) => (
-      <span className="text-zinc-500 text-[10px] uppercase tracking-wider">
+      <span className="text-ink-300 text-[10px] font-sans font-semibold uppercase tracking-wider">
         {info.getValue().replace(/_/g, " ")}
       </span>
     ),
@@ -143,7 +143,7 @@ function ExpandableQuote({ text }: { text: string }) {
     <button
       type="button"
       onClick={() => truncated && setExpanded(!expanded)}
-      className={`text-left text-xs text-zinc-400 italic ${truncated ? "cursor-pointer hover:text-zinc-300" : ""}`}
+      className={`text-left text-xs font-sans text-ink-400 italic ${truncated ? "cursor-pointer hover:text-ink-700" : ""}`}
     >
       {expanded || !truncated ? `"${text}"` : `"${text.slice(0, 80)}..."`}
     </button>
@@ -170,13 +170,12 @@ export function ClaimsTable({ claims }: { claims: ClaimWithVerification[] }) {
 
   return (
     <div className="space-y-3">
-      {/* Filter controls */}
       <div className="flex items-center gap-3">
-        <label className="text-[10px] text-zinc-500 uppercase tracking-wider">
+        <label className="text-[10px] font-sans font-semibold text-ink-300 uppercase tracking-wider">
           Filter:
         </label>
         <select
-          className="rounded-md border border-zinc-700 bg-zinc-800 px-2 py-1 text-xs text-zinc-300 focus:outline-none focus:border-zinc-500"
+          className="font-sans text-xs text-ink-700 bg-white border border-parchment-300 px-2 py-1 focus:outline-none focus:border-ink-300"
           value={currentFilter}
           onChange={(e) =>
             verdictColumn?.setFilterValue(e.target.value || undefined)
@@ -188,26 +187,22 @@ export function ClaimsTable({ claims }: { claims: ClaimWithVerification[] }) {
           <option value="misleading">Misleading</option>
           <option value="unverifiable">Unverifiable</option>
         </select>
-        <span className="text-[10px] text-zinc-600">
+        <span className="text-[10px] font-mono text-ink-300">
           {table.getFilteredRowModel().rows.length} claims
         </span>
       </div>
 
-      {/* Table */}
-      <div className="overflow-x-auto rounded-xl border border-zinc-800">
-        <table className="w-full text-left">
-          <thead className="bg-zinc-900/80">
+      <div className="overflow-x-auto border border-parchment-300 bg-white">
+        <table className="data-table">
+          <thead>
             {table.getHeaderGroups().map((headerGroup) => (
               <tr key={headerGroup.id}>
                 {headerGroup.headers.map((header) => (
-                  <th
-                    key={header.id}
-                    className="px-3 py-2.5 text-[10px] font-medium text-zinc-500 uppercase tracking-wider whitespace-nowrap"
-                  >
+                  <th key={header.id}>
                     {header.isPlaceholder ? null : (
                       <button
                         type="button"
-                        className={`flex items-center gap-1 ${header.column.getCanSort() ? "cursor-pointer select-none hover:text-zinc-300" : ""}`}
+                        className={`flex items-center gap-1 ${header.column.getCanSort() ? "cursor-pointer select-none hover:text-ink-900" : ""}`}
                         onClick={header.column.getToggleSortingHandler()}
                       >
                         {flexRender(
@@ -215,10 +210,10 @@ export function ClaimsTable({ claims }: { claims: ClaimWithVerification[] }) {
                           header.getContext()
                         )}
                         {header.column.getIsSorted() === "asc" && (
-                          <span className="text-emerald-400">^</span>
+                          <span className="text-rust-500">^</span>
                         )}
                         {header.column.getIsSorted() === "desc" && (
-                          <span className="text-emerald-400">v</span>
+                          <span className="text-rust-500">v</span>
                         )}
                       </button>
                     )}
@@ -227,14 +222,11 @@ export function ClaimsTable({ claims }: { claims: ClaimWithVerification[] }) {
               </tr>
             ))}
           </thead>
-          <tbody className="divide-y divide-zinc-800/50">
+          <tbody>
             {table.getRowModel().rows.map((row) => (
-              <tr
-                key={row.id}
-                className="hover:bg-zinc-800/30 transition-colors"
-              >
+              <tr key={row.id}>
                 {row.getVisibleCells().map((cell) => (
-                  <td key={cell.id} className="px-3 py-2.5">
+                  <td key={cell.id}>
                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
                   </td>
                 ))}

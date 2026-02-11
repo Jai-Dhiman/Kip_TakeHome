@@ -7,7 +7,7 @@ export function CredibilityGauge({
   score: number;
   size?: number;
 }) {
-  const strokeWidth = size * 0.1;
+  const strokeWidth = size * 0.08;
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
   const progress = (score / 100) * circumference;
@@ -16,16 +16,14 @@ export function CredibilityGauge({
   return (
     <div className="relative" style={{ width: size, height: size }}>
       <svg width={size} height={size} className="-rotate-90">
-        {/* Background circle */}
         <circle
           cx={size / 2}
           cy={size / 2}
           r={radius}
           fill="none"
-          stroke="#27272a"
+          stroke="#E0D9CC"
           strokeWidth={strokeWidth}
         />
-        {/* Progress arc */}
         <circle
           cx={size / 2}
           cy={size / 2}
@@ -34,13 +32,13 @@ export function CredibilityGauge({
           stroke={color}
           strokeWidth={strokeWidth}
           strokeDasharray={`${progress} ${circumference - progress}`}
-          strokeLinecap="round"
+          strokeLinecap="butt"
           className="transition-all duration-700 ease-out"
         />
       </svg>
       <div className="absolute inset-0 flex items-center justify-center">
         <span
-          className="font-bold tabular-nums"
+          className="font-mono font-bold"
           style={{
             fontSize: size * 0.28,
             color,
