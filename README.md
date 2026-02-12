@@ -1,4 +1,4 @@
-# ExecCheck
+# Kip Take Home
 
 Earnings call credibility analysis for 10 public companies (AAPL, TSLA, MSFT, META, JPM, COST, CRM, PFE, NFLX, COIN). Extracts quantitative claims from transcripts, verifies them against SEC filings, and scores management credibility through an adversarial debate system.
 
